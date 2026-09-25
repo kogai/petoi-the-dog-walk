@@ -4,7 +4,8 @@
 #
 #   scripts/check-public.sh                  tracked + new (not ignored) files in the working tree
 #   scripts/check-public.sh --staged         lines added in the index (run before committing)
-#   scripts/check-public.sh --range A..B     lines added and commit messages in a commit range (CI)
+#   scripts/check-public.sh --range A..B     lines added, commit messages and author/committer
+#                                            identities in a commit range (CI)
 #
 # A line whose content contains "public-ok" is allowed (explain why in the PR).
 # Written for bash 3.2 (macOS default) and POSIX/BSD tools: no mapfile, no \b, no awk intervals.
@@ -24,7 +25,7 @@ patterns=(
   '(^|[^A-Za-z0-9])(sk|ts)-[A-Za-z0-9_-]{20,}|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}'
 )
 email_pattern='[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'
-allowed_emails='noreply@anthropic\.com|[A-Za-z0-9._-]+@users\.noreply\.github\.com|git@github\.com'
+allowed_emails='noreply@anthropic\.com|[A-Za-z0-9._-]+@users\.noreply\.github\.com|noreply@github\.com|git@github\.com'
 
 tab=$(printf '\t')
 stream=$(mktemp)
@@ -59,6 +60,8 @@ case "${1:-}" in
       exit 2
     fi
     {
+      # Author and committer identities are public history too.
+      git log --no-color --format='%an <%ae>%n%cn <%ce>' "$2" | sed -E "s/^/commit-identity${tab}/"
       git log --no-color --format='%B' "$2" | sed -E "s/^/commit-message${tab}/"
       git log -p -U0 --no-color --format='' "$2" | emit_added_lines "history"
     } >"$stream"
