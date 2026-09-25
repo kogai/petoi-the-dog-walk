@@ -1,0 +1,45 @@
+{
+  "name": "petoi-the-dog-walk",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Petoi Bittle driven by Jev (reasoning) and a fly-brain simulation (reflex)",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "check": "scripts/check.sh",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "lint": "eslint .",
+    "typecheck": "tsc",
+    "deps": "depcruise src scripts --config .dependency-cruiser.cjs",
+    "test": "vitest run",
+    "test:cov": "vitest run --coverage",
+    "test:jev": "RUN_JEV=1 vitest run --project jev",
+    "test:hardware": "RUN_HARDWARE=1 vitest run --project hardware"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.14",
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^22.20.4",
+    "@vitest/coverage-v8": "^5.0.2",
+    "dependency-cruiser": "^18.4.0",
+    "eslint": "^10.11.0",
+    "eslint-plugin-functional": "^10.0.1",
+    "fast-check": "^4.10.2",
+    "jiti": "^2.7.0",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.70.1",
+    "vitest": "^5.0.2"
+  },
+  "dependencies": {
+    "serialport": "^13.0.0"
+  },
+  "pnpm": {
+    "ignoredBuiltDependencies": [
+      "@serialport/bindings-cpp"
+    ]
+  }
+}

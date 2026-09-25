@@ -1,12 +1,3 @@
-__pycache__/
-*.py[cod]
-.venv/
-.mypy_cache/
-.ruff_cache/
-.pytest_cache/
-.hypothesis/
-.coverage
-htmlcov/
 dist/
 .env
 .env.*
@@ -20,5 +11,8 @@ dist/
 *.log
 # Raw experiment outputs: redact before pasting into experimentals/*.md
 experimentals/**/*.txt
-experimentals/**/*.py
+experimentals/**/*.ts
 experimentals/**/*.csv
+node_modules/
+coverage/
+*.tsbuildinfo

@@ -1,33 +1,50 @@
 # 静的検査
 
 すべて `scripts/check.sh` で一度に実行でき、CI（`.github/workflows/ci.yml`）も同じスクリプトを使う。
-設定は `pyproject.toml` に集める。
 
 | 検査 | ツール | 設定 | 失敗したら |
 |---|---|---|---|
-| フォーマット | `ruff format` | 行長 100 | `uv run ruff format` で直す |
-| lint | `ruff check` | 下の規則セット | 直す。自動修正は `uv run ruff check --fix` |
-| 型 | `mypy --strict` | `src/` と `tests/` | 直す |
-| テスト | `pytest` | [testing.md](testing.md) | 直す |
 | 公開してよい内容か | `scripts/check-public.sh` | [public-repo.md](public-repo.md) | 伏せるか、ファイルを外す |
-| ロックファイル | `uv lock --check` | `uv.lock` | `uv lock` を実行してコミット |
+| ロックファイル | `pnpm install --frozen-lockfile` | `pnpm-lock.yaml` | `pnpm install` を実行してコミット |
+| 整形 | Biome | `biome.json`（行長 100） | `pnpm format` で直す |
+| lint | ESLint | `eslint.config.ts` | 直す。自動修正は `pnpm exec eslint --fix .` |
+| 型 | `tsc` | `tsconfig.json` | 直す |
+| モジュールの境界 | dependency-cruiser | `.dependency-cruiser.cjs` | 依存の向きを直す。規則を変えるなら設計書も直す |
+| テスト | Vitest | [testing.md](testing.md) | 直す |
 
-## ruff の規則セット
+## 型検査（tsconfig.json）
 
-`E`, `W`, `F`（基本）, `I`（import 順）, `B`（バグになりやすい書き方）, `UP`（新しい構文）,
-`SIM`（簡略化）, `RUF`, `PT`（pytest）, `ASYNC`（非同期の誤用）, `S`（セキュリティ。テストでは `S101` を除外）,
-`N`（命名）, `ANN`（型注釈）, `TID`（import 制限）, `PGH`（コード無しの `noqa`・`type: ignore` を禁止）。
+`strict` に加えて、次を有効にしている。
 
-- `TID251` で `typesafe_sdk` の import を `reasoning/jev.py` 以外で禁止する（[03](../design/03-reasoning-layer.md) 4節）。本体を実装するときに設定を足す。
+- `noUncheckedIndexedAccess`: 配列・レコードの添字アクセスは `undefined` を含む。
+- `exactOptionalPropertyTypes`: 省略可能なプロパティに `undefined` を明示的に入れられない。
+- `erasableSyntaxOnly`: `enum`・`namespace` など、型を取り除くだけでは動かない構文を禁止する（Node が `.ts` を直接実行するため）。
+- `noPropertyAccessFromIndexSignature`、`noImplicitReturns`、`noFallthroughCasesInSwitch`、`noUnusedLocals`、`noUnusedParameters`。
+
+## lint（eslint.config.ts）
+
+- typescript-eslint の `strictTypeChecked` と `stylisticTypeChecked`（型情報を使う規則）。
+- `switch-exhaustiveness-check`: ユニオン型の `switch` で分岐の漏れを禁止する。
+- `explicit-module-boundary-types`: 公開する関数の引数と戻り値に型を書く。
+- `consistent-type-definitions: type`: `interface` ではなく `type` を使う。
+- `src/` の関数型のコアには eslint-plugin-functional の規則をかける: `let`・配列やオブジェクトの書き換え・ループ文・クラス・`this`・`throw`・`try` を禁止する。
+  I/O を扱う殻（`src/**/shell/**`、`src/main.ts`）は除外する。詳しくは [coding.md](coding.md)。
+- `no-console`（`tests/`・`scripts/` を除く）。
+
+## モジュールの境界（.dependency-cruiser.cjs）
+
+- 循環 import を禁止する。
+- `domain`・`arbiter`・`skills` は Node の組み込みモジュール（`node:fs` など）と I/O を持つモジュールを import できない。
+- TypeSafe の API を呼ぶ `src/reasoning/jev.ts` は、`src/reasoning/` と `scripts/experiments/` 以外から import できない（それ以外は `Reasoner` 型だけを見る）。
+- `src/` から `tests/` を import できない。
 
 ## 例外の書き方
 
-- 規則を無効にするときは、行単位で `# noqa: <コード>  # <理由>` と書く。ファイル単位・全体での無効化は PR で理由を説明する。
-- `type: ignore` は `# type: ignore[<コード>]  # <理由>` の形だけ許す。コード無しは ruff `PGH003` と mypy `ignore-without-code` で、余分なものは `warn_unused_ignores` で検出される。
-- 理由コメントの有無は機械で検出できないので、レビューで確認する。
-- `Any` は外部ライブラリの境界だけで使い、すぐに自前の型へ変換する。これもレビューで確認する（`disallow_any_explicit` は `reasoning/jev.py` を実装するときに有効にするか決める）。
+- 規則を無効にするときは、行単位で `// eslint-disable-next-line <規則名> -- <理由>` と書く。ファイル単位・全体での無効化は PR で理由を説明する。
+- `@ts-ignore` は禁止。`@ts-expect-error` は 10 文字以上の説明付きでだけ許す。
+- `any` は使わない（`strictTypeChecked` が検出する）。外から来る値は `unknown` で受けて、境界でスキーマ検査してから内側の型にする。
+- 型アサーション（`as`）は、境界でスキーマ検査した直後などに限り、理由をコメントする。レビューで確認する。
 
 ## 秘密情報
 
 - [public-repo.md](public-repo.md) を参照。`.env` は `.gitignore` 済み。
-- `ruff` の `S105`/`S106`（ハードコードされたパスワード）で一部を検出する。

@@ -65,6 +65,7 @@
 | F-J5 | 複数の質問を1回の呼び出しでまとめて出せる。質問を増やしても応答時間はほとんど変わらない |
 | F-J6 | 公式 cookbook（skill suggestion）に、スキルの説明文を Choice の選択肢にし、「そもそも必要か」を Noul で判定する例がある。呼び出しは 0.09〜0.31 秒だった |
 | F-J7 | Python SDK は `typesafe-sdk`。`pip install "typesafe-sdk>=0.5.7" --extra-index-url https://pypi.typesafe.ai/`。アーリーアクセス。入力トークンは10億あたり42ドル |
+| F-J9 | Jev は HTTPS の API で呼べる。`POST https://api.typesafe.ai/v1/systemone`、ヘッダー `Authorization: Bearer <API キー>`、本文は `{"model": "jev-latest", "state": ..., "questions": {<キー>: {"type": "choice", "instructions": ..., "criteria": {...}}}}`。応答は `{"answers": {<キー>: {"choice", "probabilities", "confidence"}}, "model", "usage"}`。**公式ドキュメントではなく、fly-brain リポジトリの `jev.py` のコードで確認**（Noul の `type` の書き方はそこに無い） |
 | F-J8 | 公式が挙げる弱点（jev-1.13）: 文字どおりに解釈する／主な学習言語は英語で他言語は精度が下がる／無関係な情報が多いと精度が落ちる／矛盾・間接的な指示が苦手／数の計算・日付比較が苦手／敵対的な文章に動かされることがある／文章生成に向かない |
 
 出典（TypeSafe ドキュメント）:
@@ -74,6 +75,7 @@
 - F-J6、F-J7（SDK）: [Skill suggestion](https://docs.typesafe.ai/cookbooks/skill_suggestion.md)
 - F-J7（料金・アーリーアクセス）: [TypeSafe AI](https://typesafe.ai/)
 - F-J8: [Jev 1.13 jaggedness](https://docs.typesafe.ai/model-jaggedness/jev-1.13.md)
+- F-J9: [mk-jev-fly-brain の jev.py](https://raw.githubusercontent.com/lavallee/mk-jev-fly-brain/main/jev.py)（2026-09-25 に main ブランチで確認。公式ドキュメントでの確認は未了）
 
 ## ハエ脳（mk-jev-fly-brain）
 

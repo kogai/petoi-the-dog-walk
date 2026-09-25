@@ -8,15 +8,16 @@
 ## 目的
 
 Mac から Bittle へトークンを送ったとき、Bittle が何を返すか（エコーの有無・形式・時間）を記録する。
-`FakeTransport` の振る舞いと、`SerialTransport`／`HttpTransport` の実装をこれに合わせる。
-公式 Python API（PetoiRobot）を依存に入れるか（D-08）の材料にもする。
+`fakeTransport` の振る舞いと、`serialTransport`／`httpTransport` の実装をこれに合わせる。
+あわせて、本体で使う予定の npm パッケージ `serialport` が Mac で動くかを確かめる。
 
 接続手段は問わない。**手持ちの経路だけ**で行う（全部を試す必要はない）。
 
 ## 必要なもの
 
 - 機材: Bittle（標準ファーム）、手持ちの接続手段（USB アダプタ / Bluetooth ドングル / ESP8266 のどれか）
-- ソフトウェア: Python 3.11 以上、`pip install pyserial`（シリアル経路の場合）、`curl`（Wi-Fi 経路の場合）
+- ソフトウェア（シリアル経路）: Node.js 22.18 以上、pnpm。このリポジトリを clone して `pnpm install` しておく
+- ソフトウェア（Wi-Fi 経路）: `curl`
 - 所要時間の目安: 30分
 
 ## 安全上の注意
@@ -24,7 +25,7 @@ Mac から Bittle へトークンを送ったとき、Bittle が何を返すか�
 - Bittle を平らな床に置き、周囲 2m 以内に物・段差が無いことを確認する。台の上では行わない。
 - 歩行トークン（`kwkF`）の観察は、**手で胴を持って足を浮かせた状態**で行ってもよい（歩き続けるかどうかは足の動きで分かる）。
 - 止めるときは `d` を送る。止まらなければ電源を切る。
-- miniterm を `Ctrl-]` で抜けても動作は止まらない。**終了の前に必ず `d` を送る。**
+- 下のスクリプトは、終わるときと `Ctrl-C` を押したときに `d` を送る。それでも動き続けたら電源を切る。
 
 ## 手順
 
@@ -35,41 +36,35 @@ Mac から Bittle へトークンを送ったとき、Bittle が何を返すか�
    ```sh
    ls /dev/cu.*
    ```
-2. pyserial 付属の端末で接続する（`<PORT>` は 1 で見つけたもの）。
+2. 接続を確かめる。接続直後に何か表示されたら、そのまま記録する。
    ```sh
-   python -m serial.tools.miniterm <PORT> 115200 --eol LF
+   node scripts/experiments/e00-serial-probe.ts <PORT> kbalance
    ```
-3. 接続直後に何か表示されたら、そのまま記録する。
-4. 次のトークンを1つずつ入力し、Enter を押す。`ksit`・`kbalance`・`khi` は動作が終わるまで待つ。
-   `kwkF` だけは、送ってから 2 秒後に `kbalance` を送る（歩き続けるかの観察は手順7で行う）。
-   `ksit` → `kbalance` → `khi` → `kwkF` → （2秒後）`kbalance` → `d`
-5. 各トークンについて、画面の表示と、Bittle の動きを記録する。
-6. `ksit` を送った直後にもう一度 `ksit` を送り、何が起きるか記録する（同じトークンの連続送信）。
-7. `kwkF` を送ったあと、何も送らずに 5 秒待ったとき、歩き続けるか止まるかを記録する。
-8. 存在しないトークン `kzzz` を送り、何が返るか記録する。
-9. 任意: 改行を `--eol CRLF` に変えて 4 を繰り返し、違いがあれば記録する。
-10. `d` を送ってから、`Ctrl-]` で終了する。
+   スクリプトは、送ったもの（`->`）と受け取ったもの（`<-`）を、開始からのミリ秒付きで表示する。
+   最後に必ず `d` を送る。**未実行**のスクリプトなので、エラーが出たらそのまま結果に貼ればよい。
+3. 基本の動作（各トークンのあと 3 秒ずつ待つ。`kwkF` は 3 秒後の `kbalance` で止める）。
+   ```sh
+   node scripts/experiments/e00-serial-probe.ts <PORT> ksit kbalance khi kwkF kbalance
+   ```
+4. 同じトークンの連続送信（0.2 秒あけて2回）。
+   ```sh
+   E00_WAIT_MS=200 node scripts/experiments/e00-serial-probe.ts <PORT> ksit ksit
+   ```
+5. 歩行は続くか（`kwkF` を送って 5 秒間なにも送らない）。
+   ```sh
+   E00_WAIT_MS=5000 node scripts/experiments/e00-serial-probe.ts <PORT> kwkF
+   ```
+6. 存在しないトークン。
+   ```sh
+   node scripts/experiments/e00-serial-probe.ts <PORT> kzzz
+   ```
+7. 任意: 改行コードを CRLF にして 3 を繰り返し、違いがあれば記録する。
+   ```sh
+   E00_EOL=CRLF node scripts/experiments/e00-serial-probe.ts <PORT> ksit kbalance
+   ```
+8. 各手順の出力をそのまま貼り、Bittle の動きを書き添える。
 
-任意（時間の記録）: 次のスクリプトで、送信から応答までの時間を記録できる（**未実行**。動かなければ手順 A だけでよい）。
-
-```python
-# e00_timing.py  使い方: python e00_timing.py <PORT> ksit
-import sys
-import time
-
-import serial
-
-port, token = sys.argv[1], sys.argv[2]
-with serial.Serial(port, 115200, timeout=0.1) as s:
-    time.sleep(2)  # 接続時のリセット待ち
-    s.reset_input_buffer()
-    t0 = time.monotonic()
-    s.write((token + "\n").encode())
-    while time.monotonic() - t0 < 5:
-        line = s.readline()
-        if line:
-            print(f"{(time.monotonic() - t0) * 1000:7.1f} ms  {line!r}")
-```
+スクリプトが動かない場合は、Arduino IDE のシリアルモニター（115200、改行は「LF」）で同じトークンを1つずつ送り、表示と動きを記録してもよい。
 
 ### B. Wi-Fi 経路（ESP8266）
 
@@ -84,37 +79,32 @@ with serial.Serial(port, 115200, timeout=0.1) as s:
    ```
 3. 各コマンドの HTTP ステータス、応答本文、Bittle の動きを記録する。
 
-### C. 公式 Python API（任意）
-
-PetoiRobot を使ったことがあれば、`autoConnect()` と `sendSkillStr('ksit', 3)` を試し、
-インストール方法と、使ってみた感想（依存に入れてよさそうか）を書く。
-
 ## 記録すること
 
 - [ ] 使った接続手段と、ファームのバージョン（接続直後の表示に出ることが多い。出なければ [Serial Protocol](https://docs.petoi.com/apis/serial-protocol.md) でバージョン表示のトークンを探す。無ければ「不明」でよい）
 - [ ] 接続直後の表示
-- [ ] 各トークンへの応答（そのまま貼る）と動き
-- [ ] 同じトークンを連続で送ったときの挙動（手順 A-6）
-- [ ] 歩行トークンは送り続ける必要があるか（手順 A-7）
-- [ ] 不正なトークンへの応答（手順 A-8 / B）
-- [ ] 改行コードの違いの有無（任意）
-- [ ] 応答までの時間（任意）
+- [ ] 各トークンへの応答と時刻（スクリプトの出力をそのまま貼る）と動き（手順 A-3）
+- [ ] 同じトークンを連続で送ったときの挙動（手順 A-4）
+- [ ] 歩行トークンは送り続ける必要があるか（手順 A-5）
+- [ ] 不正なトークンへの応答（手順 A-6 / B）
+- [ ] 改行コードの違いの有無（任意、手順 A-7）
+- [ ] スクリプトが動いたか。動かなければエラー全文（`serialport` が Mac で使えるかの判断材料）
 
 ## 判定基準
 
 | 観察 | 結果 | 設計への影響 |
 |---|---|---|
-| 応答（A-4） | トークンごとに決まった応答が返る | `SerialTransport.send` は応答を待って成否を判定する |
-| 応答（A-4） | 応答が無い／不定 | 送りっぱなしにして、送信間隔の下限だけで制御する |
-| 連続送信（A-6） | 動作が最初からやり直しになる | 同じトークンの連続送信を必ず抑止する |
-| 連続送信（A-6） | 2回目は無視される | 抑止は必須ではない（無駄な通信を減らすためだけに行う） |
-| 歩行（A-7） | 歩き続ける | 同じトークンを連続で送らない（06 の設計案どおり） |
-| 歩行（A-7） | 止まる | 歩行中は一定間隔で再送する設計に変える |
-| 不正トークン（A-8） | エラーの応答がある | `send` で検出して例外にする |
-| Wi-Fi（B） | 応答本文・ステータスで成否が分かる | `HttpTransport` はそれで成否を判定する |
-| Wi-Fi（B） | 常に同じ応答 | `HttpTransport` は HTTP エラーだけを失敗とする |
-| PetoiRobot（C） | 問題なく入り、上の観察が同じようにできる | D-08: 依存に入れる候補にする |
-| PetoiRobot（C） | 入らない／使いにくい／試していない | D-08: pyserial で直接書く |
+| 応答（A-3） | トークンごとに決まった応答が返る | `serialTransport.send` は応答を待って成否を判定する |
+| 応答（A-3） | 応答が無い／不定 | 送りっぱなしにして、送信間隔の下限だけで制御する |
+| 連続送信（A-4） | 動作が最初からやり直しになる | 同じトークンの連続送信を必ず抑止する |
+| 連続送信（A-4） | 2回目は無視される | 抑止は必須ではない（無駄な通信を減らすためだけに行う） |
+| 歩行（A-5） | 歩き続ける | 同じトークンを連続で送らない（06 の設計案どおり） |
+| 歩行（A-5） | 止まる | 歩行中は一定間隔で再送する設計に変える |
+| 不正トークン（A-6） | エラーの応答がある | `send` で検出して `Result` の失敗として返す |
+| Wi-Fi（B） | 応答本文・ステータスで成否が分かる | `httpTransport` はそれで成否を判定する |
+| Wi-Fi（B） | 常に同じ応答 | `httpTransport` は HTTP エラーだけを失敗とする |
+| スクリプト（A） | 動いた | `serialTransport` は `serialport` で書く |
+| スクリプト（A） | `serialport` の読み込みや接続で失敗した | 原因を調べる。ネイティブモジュールの問題なら、別の方法（Web Serial など）を検討する |
 
 ## 結果（実施者が記入）
 
@@ -122,7 +112,7 @@ PetoiRobot を使ったことがあれば、`autoConnect()` と `sendSkillStr('k
 
 - ファームウェアのバージョン:
 - 接続手段:
-- Mac の OS / Python のバージョン:
+- Mac の OS / Node.js のバージョン:
 
 ### 出力・観察
 

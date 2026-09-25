@@ -13,20 +13,25 @@ Jev は主な学習言語が英語で、日本語は精度が下がる（F-J8）
 
 ## 必要なもの
 
-- TypeSafe の API キー。シェルで `export TYPESAFE_API_KEY=...` のように設定する（**変数名は未確認**。SDK の案内と違えばそちらに従う）。
+- TypeSafe の API キー。シェルで `export TYPESAFE_API_KEY=...` のように設定する（スクリプトはこの名前で読む）。
   **キーをスクリプトやファイルに書かない。** このリポジトリは公開されている
 - 費用: 36 回呼び出す。入力は1回あたり数百トークン程度なので、料金（10億トークンあたり42ドル、F-J7）ではごくわずかの見込み
-- Python 3.11 以上、`pip install "typesafe-sdk>=0.5.7" --extra-index-url https://pypi.typesafe.ai/`
+- Node.js 22.18 以上。このリポジトリを clone しておく（依存パッケージは使わないので `pnpm install` は不要）
 - 所要時間の目安: 30分
 
 ## 手順
 
 0. **実行する前に**、下の「期待する動作」の表を埋める（結果を見てから埋めると比較にならない）。
-1. 下のスクリプトを `experimentals/e05_jev_ja.py` として保存する（`.gitignore` 済みでコミットされない）。
-   **未実行**。SDK の書き方は公式ドキュメントの例に基づく。`system_one` の呼び方と `answers` の構造も **未確認**。
-   `instruction` に `None`（JSON の null）を入れてよいかも未確認。エラーになったら、エラーをそのまま結果に貼ってもらえれば、こちらで直す。
-2. `python experimentals/e05_jev_ja.py > experimentals/e05_result.txt 2>&1` を実行する。
-3. 出力をそのまま「結果」に貼る。API キーが出力に含まれていないことを確認する。
+1. スクリプト [`scripts/experiments/e05-jev-ja.ts`](../scripts/experiments/e05-jev-ja.ts) を使う。
+   **未実行**。API の呼び方は fly-brain リポジトリのコード（F-J9）に基づき、公式ドキュメントでは未確認。
+   特に Noul の質問の `type` の書き方（`"noul"`）は推測。`instruction` に null を入れてよいかも未確認。
+   エラーの応答も記録されるので、そのまま結果に貼ってもらえれば、こちらで直す。
+2. 次を実行する。
+   ```sh
+   node scripts/experiments/e05-jev-ja.ts > experimentals/e05_result.txt 2>&1
+   ```
+3. `experimentals/e05_result.txt`（`.gitignore` 済みでコミットされない）の中身を、そのまま「結果」に貼る。
+   API キーが含まれていないことを確認する。
 
 ### 期待する動作（実行前に依頼者が記入）
 
@@ -38,93 +43,11 @@ Jev は主な学習言語が英語で、日本語は精度が下がる（F-J8）
 | friendly |  /  |  /  |  /  |
 | lazy |  /  |  /  |  /  |
 
-```python
-import json
-
-from typesafe_sdk import Choice, Noul, TypeSafeClient
-
-PERSONALITIES = {
-    "shy": {
-        "ja": "とても臆病。知らないものが近づくと、すぐに後ずさりする。",
-        "en": "Very shy. When something unfamiliar approaches, it backs away immediately.",
-    },
-    "friendly": {
-        "ja": "人懐っこい。人を見ると近寄って挨拶する。",
-        "en": "Friendly. When it sees a person, it walks up and greets them.",
-    },
-    "lazy": {
-        "ja": "怠け者。できるだけ座っていたい。",
-        "en": "Lazy. Wants to stay sitting as much as possible.",
-    },
-}
-SITUATIONS = {
-    "ja": ["知らない人が近づいてきた。", "飼い主が名前を呼んだ。", "何も起きていない。"],
-    "en": ["A stranger is approaching.", "The owner called its name.", "Nothing is happening."],
-}
-INSTRUCTIONS = {
-    "ja": [None, "人が近づいたら座って。"],
-    "en": [None, "Sit down when a person approaches."],
-}
-# 質問文と選択肢の説明も、言語ごとに用意する（ja 条件を日本語だけにするため）
-QUESTIONS = {
-    "en": {
-        "instruction_applies": Noul(
-            instructions="The user's current instruction applies to the current situation."
-        ),
-        "next_action": Choice(
-            instructions="Which action should the robot take next?",
-            criteria={
-                "walk": "Walk forward",
-                "back": "Step backward",
-                "sit": "Sit down",
-                "hello": "Greet",
-                "balance": "Stand still",
-            },
-        ),
-    },
-    "ja": {
-        "instruction_applies": Noul(instructions="ユーザーのその場の指示は、今の状況に当てはまる。"),
-        "next_action": Choice(
-            instructions="ロボットが次にとるべき動作はどれか。",
-            criteria={
-                "walk": "前に歩く",
-                "back": "後ろに下がる",
-                "sit": "座る",
-                "hello": "挨拶する",
-                "balance": "その場に立っている",
-            },
-        ),
-    },
-}
-
-with TypeSafeClient() as client:
-    for p_name, p in PERSONALITIES.items():
-        for lang in ("ja", "en"):
-            for i, situation in enumerate(SITUATIONS[lang]):
-                for j, instruction in enumerate(INSTRUCTIONS[lang]):
-                    state = {
-                        "personality": p[lang],
-                        "situation": situation,
-                        "instruction": instruction,
-                    }
-                    r = client.system_one(state=state, questions=QUESTIONS[lang])
-                    a = r.answers
-                    print(json.dumps({
-                        "personality": p_name,
-                        "lang": lang,
-                        "situation": i,
-                        "instruction": j,
-                        "noul": a["instruction_applies"].noul,
-                        "choice": a["next_action"].choice,
-                        "confidence": a["next_action"].confidence,
-                        "probabilities": a["next_action"].probabilities,
-                    }, ensure_ascii=False))
-```
 
 ## 記録すること
 
-- [ ] SDK のバージョン（`pip show typesafe-sdk`）
-- [ ] 出力全体（36 行の JSON）
+- [ ] Node.js のバージョン（`node --version`）
+- [ ] 出力全体（36 行の JSON。各行に HTTP ステータス、所要時間、応答本文が入る）
 - [ ] スクリプトを直した場合は、その差分
 - [ ] 直感と合わない選択があれば、どれか
 
@@ -145,7 +68,7 @@ with TypeSafeClient() as client:
 
 ### 環境
 
-- SDK のバージョン:
+- Node.js のバージョン:
 - 実施日時:
 
 ### 出力

@@ -20,5 +20,5 @@
 
 ## 3. 設計とコードの同期
 
-- モジュール構成や Protocol を変えたら、同じ PR で [02-architecture.md](../design/02-architecture.md) を直す。
+- モジュール構成や境界の型を変えたら、同じ PR で [02-architecture.md](../design/02-architecture.md) を直す。
 - 未決定事項を決めたら、`decisions.md` の状態・理由・日付を更新する。

@@ -17,19 +17,21 @@
 | [docs/design/](docs/design/) | 設計書（概要、構成、各層、調停、通信、決定事項、確認済みの事実） |
 | [docs/rules/](docs/rules/) | 開発ルール（テスト、静的検査、レビュー、Git、文書） |
 | [experimentals/](experimentals/) | 人に依頼する実験の手順と結果 |
-| `src/petoi_walk/` | 本体（Python） |
+| `src/` | 本体（TypeScript） |
 | `tests/` | 自動テスト |
 | `scripts/check.sh` | CI と同じ検査を手元で実行する |
 | `.claude/agents/` | レビュー用サブエージェントの定義 |
 
 ## 開発
 
-必要なもの: [uv](https://docs.astral.sh/uv/)（Python 3.11 以上は uv が用意する）
+必要なもの: Node.js 22.18 以上、[pnpm](https://pnpm.io/)
 
 ```sh
-uv sync
-./scripts/check.sh   # ruff format / ruff check / mypy --strict / pytest
+pnpm install
+pnpm check   # 公開内容の検査 / Biome / ESLint / tsc / dependency-cruiser / Vitest
 ```
+
+言語は TypeScript。判断のロジックは純粋関数で書き、I/O は外側に閉じ込める（[docs/rules/coding.md](docs/rules/coding.md)）。
 
 ルールは [docs/rules/](docs/rules/)、AI エージェント向けの要約は [CLAUDE.md](CLAUDE.md)。
 

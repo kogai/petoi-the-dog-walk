@@ -17,10 +17,16 @@ patterns=(
 )
 allowed_emails='noreply@anthropic\.com|@users\.noreply\.github\.com'
 
+mapfile -d '' files < <(git ls-files -z --cached --others --exclude-standard -- ':!pnpm-lock.yaml')
+existing=()
+for f in "${files[@]}"; do [[ -f "$f" ]] && existing+=("$f"); done
+
 found=0
 for p in "${patterns[@]}"; do
-  if matches=$(git ls-files -z -- ':!uv.lock' | xargs -0 grep -nIE -- "$p" 2>/dev/null \
-      | grep -v 'public-ok' | grep -vE "$allowed_emails"); then
+  # Decide on the output, not the exit status: grep exits 1 when a batch has no match.
+  matches=$(printf '%s\0' "${existing[@]}" | xargs -0 grep -nIE -- "$p" 2>/dev/null \
+    | grep -v 'public-ok' | grep -vE "$allowed_emails" || true)
+  if [[ -n "$matches" ]]; then
     echo "$matches"
     found=1
   fi

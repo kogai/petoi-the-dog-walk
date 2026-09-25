@@ -9,8 +9,9 @@ run() {
 }
 
 run scripts/check-public.sh
-run uv lock --check
-run uv run --frozen ruff format --check
-run uv run --frozen ruff check
-run uv run --frozen mypy
-HYPOTHESIS_PROFILE=ci run uv run --frozen pytest --cov "$@"
+run pnpm install --frozen-lockfile --silent
+run pnpm exec biome format .
+run pnpm exec eslint .
+run pnpm exec tsc
+run pnpm exec depcruise src scripts --config .dependency-cruiser.cjs
+run pnpm exec vitest run --project default --coverage "$@"

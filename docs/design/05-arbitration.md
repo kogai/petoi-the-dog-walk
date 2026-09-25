@@ -11,24 +11,23 @@
 
 ## 2. 純粋関数として定義する（設計案）
 
-```python
-def arbitrate(
-    now_ms: int,
-    reasoned: ReasonedDecision | None,
-    reflex: ReflexOutput | None,
-    policy: ArbiterPolicy,        # 閾値・有効期限など
-) -> Arbitration:                 # 採用した Action と、採用理由（どの規則か）
-    ...
+```ts
+export const arbitrate = (
+  nowMs: number,
+  reasoned: ReasonedDecision | null,
+  reflex: ReflexOutput | null,
+  policy: ArbiterPolicy, // 閾値・有効期限など
+): Arbitration => { /* ... */ }; // 採用した Action と、採用理由（どの規則か）
 ```
 
 - I/O・時計・乱数を持たない。同じ入力には必ず同じ出力を返す。
-- 採用理由（`Rule.INSTRUCTION` / `Rule.PERSONALITY` / `Rule.REFLEX` / `Rule.DEFAULT` / `Rule.SAFETY`）を必ず返し、ログに残す。
+- 採用理由（`"instruction" | "personality" | "reflex" | "default" | "safety"` のユニオン型）を必ず返し、ログに残す。
 
-## 3. 不変条件（プロパティテストで検証する）
+## 3. 不変条件（fast-check のプロパティテストで検証する）
 
-- P1: `reasoned` が有効で `instruction_applies >= policy.instruction_threshold` なら、規則は INSTRUCTION。
-- P2: 規則が REFLEX になるのは、有効な `reasoned` が無いときだけ。
-- P3: 有効期限切れ（`now_ms - at_ms > policy.ttl_ms`）の入力は、無いのと同じに扱う。
+- P1: `reasoned` が有効で `instructionApplies >= policy.instructionThreshold` なら、規則は `instruction`。
+- P2: 規則が `reflex` になるのは、有効な `reasoned` が無いときだけ。
+- P3: 有効期限切れ（`nowMs - atMs > policy.ttlMs`）の入力は、無いのと同じに扱う。
 - P4: 入力がすべて無ければ、既定動作（`balance`）を返す。
 - P5: 出力の `Action` は必ずトークン表に存在する。
 

@@ -34,34 +34,46 @@
 - Choice の `probabilities` は判断には使わず、ログにだけ残す（調停は `choice` と `confidence` で行う。必要になったら `ReasonedDecision` に足す）。
 - Choice の答えの名前が `Action` やスキルに無い場合は、判断無しとして扱う（例外を投げてループを止めない）。
 
-設計スケッチ（未実行。SDK の書き方は公式ドキュメントの例に基づく）:
+## 4. 呼び出し方（設計案）
 
-```python
-from typesafe_sdk import Choice, Noul, TypeSafeClient
+Python SDK は使わず、HTTPS の API を `fetch` で直接呼ぶ。
+リクエストとレスポンスの形は、fly-brain リポジトリの `jev.py` で確認したもの（F-J9）。公式ドキュメントでは未確認。
 
-questions = {
-    "instruction_applies": Noul(
-        instructions="The user's current instruction applies to the current situation."
-    ),
-    "next_action": Choice(
-        instructions="Which action should the robot take next?",
-        criteria={"walk": "Walk forward", "back": "Step backward", "sit": "Sit down"},
-    ),
-}
+設計スケッチ（未実行）:
 
-with TypeSafeClient() as client:
-    response = client.system_one(state=state, questions=questions)
+```ts
+const res = await fetch("https://api.typesafe.ai/v1/systemone", {
+  method: "POST",
+  headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+  body: JSON.stringify({
+    model: "jev-latest",
+    state,
+    questions: {
+      instruction_applies: {
+        type: "noul", // 文字列 "noul" は推測（jev.py には choice の例しかない）→ E05
+        instructions: "The user's current instruction applies to the current situation.",
+      },
+      next_action: {
+        type: "choice",
+        instructions: "Which action should the robot take next?",
+        criteria: { walk: "Walk forward", back: "Step backward", sit: "Sit down" },
+      },
+    },
+  }),
+  signal: AbortSignal.timeout(timeoutMs),
+});
+// 応答: { answers: { next_action: { choice, probabilities, confidence }, ... }, model, usage }
 ```
 
-## 4. SDK の隔離
+## 5. 境界の決まり（設計案）
 
-- `typesafe-sdk` を import するのは `reasoning/jev.py` の1ファイルだけにする。
-- それ以外は `Reasoner` Protocol（[02](02-architecture.md)）だけを見る。
+- TypeSafe の API を呼ぶのは `src/reasoning/jev.ts` の1ファイルだけにする（dependency-cruiser で検査）。
+- 応答は境界でスキーマ検査し、`Result<ReasonedDecision, ReasonError>` に変換する。形が違えば `ok: false`。
+- それ以外は `Reasoner` 型（[02](02-architecture.md)）だけを見る。
 - 単体テストでは本物の API を呼ばない。記録済みの応答（`tests/fixtures/jev/*.json`）から `ReasonedDecision` への変換を検証する。
-- 本物の API を呼ぶテストは `@pytest.mark.jev` を付け、API キーがあるときだけ手元で実行する。
+- 本物の API を呼ぶテストは `*.jev.test.ts` に書き、API キーがあるときだけ手元で実行する（`pnpm test:jev`）。
 
-## 5. 未確認・実験
+## 6. 未確認・実験
 
-- E05: 日本語の性格文がどこまで効くか（英訳との比較）。
-- D-10: SDK に非同期 API があるか（未確認）。無ければスレッドで包む。
-- `system_one` の呼び方と `answers` の構造は、公式ドキュメントの例から書いたもので **未実行**。E05 で確かめる。
+- E05: 日本語の性格文がどこまで効くか（英訳との比較）。あわせて、Noul の `type` 文字列と応答の形を確かめる。
+- HTTP API の仕様は、公式ドキュメントで確かめ直す（この環境からは公式ドキュメントに届かなかった）。

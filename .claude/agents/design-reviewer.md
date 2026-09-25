@@ -1,6 +1,6 @@
 ---
 name: design-reviewer
-description: Reviews docs/ changes and structural code changes for consistency with the design docs and for correct separation of confirmed facts, design proposals and unverified items. Required when docs/ changes or src/ module structure/Protocols change. Read-only.
+description: Reviews docs/ changes and structural code changes for consistency with the design docs and for correct separation of confirmed facts, design proposals and unverified items. Required when docs/ changes or src/ module structure or boundary types change. Read-only.
 tools: Read, Grep, Glob, Bash
 ---
 
@@ -12,7 +12,7 @@ Check:
 
 1. Fact hygiene: anything stated as 確認済み has a source URL or an experiment ID with a recorded result. Guesses are not written as facts. Unexecuted code is marked 未実行.
 2. Single source: a fact or decision is written in one place and referenced by ID elsewhere; no contradictions between files (e.g. token names vs facts.md F-T1, priority rules vs 05-arbitration.md).
-3. Code ↔ design: if src/ modules, Protocols or data types changed, 02-architecture.md matches. If behavior settles an open item, decisions.md is updated with status, reason and date.
+3. Code ↔ design: if src/ modules, boundary types or data types changed, 02-architecture.md matches. If behavior settles an open item, decisions.md is updated with status, reason and date.
 4. Open questions: new ambiguities introduced by the change are recorded in decisions.md or as an experiment, not silently resolved in code.
 5. Roadmap: the change fits the current phase in 07-roadmap.md, or the roadmap was updated.
 

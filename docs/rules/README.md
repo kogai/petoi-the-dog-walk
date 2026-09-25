@@ -4,8 +4,9 @@
 
 | 文書 | 内容 |
 |---|---|
+| [coding.md](coding.md) | コードの書き方（TypeScript、関数型のコアと命令型の殻） |
 | [testing.md](testing.md) | 自動テストの方針 |
-| [static-analysis.md](static-analysis.md) | 静的検査（lint・format・型） |
+| [static-analysis.md](static-analysis.md) | 静的検査（整形・lint・型・モジュールの境界） |
 | [review.md](review.md) | サブエージェントによるレビューと人のレビュー |
 | [git-workflow.md](git-workflow.md) | ブランチ・コミット・PR・実験依頼の流れ |
 | [documentation.md](documentation.md) | 文書の書き方（確認済み／設計案／未確認の区別） |
@@ -13,7 +14,7 @@
 
 ## 変更1回ごとの最低条件（Definition of Done）
 
-1. `scripts/check.sh` が通る（lint・format・型・テスト）。
+1. `scripts/check.sh` が通る（公開内容・整形・lint・型・境界・テスト）。
 2. 振る舞いを変えたら、それを確かめるテストがある。
 3. 設計と違うことをしたら、同じ PR で `docs/design/` を直す。
 4. [review.md](review.md) の必須レビューを通し、指摘への対応を PR に書く。
