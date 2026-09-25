@@ -19,10 +19,12 @@ Mac から Bittle へトークンを送ったとき、Bittle が何を返すか�
 - 機材: Bittle（標準ファーム）、手持ちの接続手段（USB アダプタ / Bluetooth ドングル / ESP8266 のどれか）
 - ソフトウェア（シリアル経路）:
   - Xcode Command Line Tools（Rust のビルドに要る。入っていなければ `xcode-select --install`）
-  - [mise](https://mise.jdx.dev/)（Homebrew があれば `brew install mise`、無ければ `curl https://mise.run | sh`。[公式の手順](https://mise.jdx.dev/getting-started.html)）。シェルで有効にしておく（zsh なら `echo 'eval "$(mise activate zsh)"' >> ~/.zshrc` の後、新しいターミナルを開く）
+  - [mise](https://mise.jdx.dev/)（[公式の手順](https://mise.jdx.dev/getting-started.html)）。入れ方で、シェル（zsh）で有効にするコマンドが違う。どちらも、実行した後に新しいターミナルを開く
+    - Homebrew がある: `brew install mise` の後、`echo 'eval "$(mise activate zsh)"' >> ~/.zshrc`
+    - Homebrew が無い: `curl https://mise.run | sh` の後、`echo 'eval "$(~/.local/bin/mise activate zsh)"' >> ~/.zshrc`（`~/.local/bin` は既定では PATH に無いため、場所を書く）
   - このリポジトリを clone し、そのフォルダで `mise trust && mise install rust` を実行しておく（Rust が `mise.toml` の版で入る。この実験に要るのは Rust だけ。初回は数分〜十数分かかる）
 - ソフトウェア（Wi-Fi 経路）: `curl`（macOS に入っている）
-- 所要時間の目安: 40分
+- 所要時間の目安: 40分（ソフトウェアの準備を除く）
 
 ## 安全上の注意
 
