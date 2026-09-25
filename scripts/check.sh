@@ -23,7 +23,7 @@ RUSTDOCFLAGS="-D warnings" run cargo doc --locked --workspace --no-deps
 run cargo xtask deps
 run cargo xtask profiles
 run cargo xtask lints
-# Coverage floor applies to product crates; xtask (repo tooling) is tested but not counted.
-run cargo test --locked --package xtask
+# Coverage floor applies to product crates; tooling (xtask, walk-experiments) is tested but not counted.
+run cargo test --locked --package xtask --package walk-experiments
 # Runs the default test suite (no live-* features) and enforces the coverage floor.
-run cargo llvm-cov --locked --workspace --exclude xtask --fail-under-lines 80
+run cargo llvm-cov --locked --workspace --exclude xtask --exclude walk-experiments --fail-under-lines 80

@@ -35,6 +35,7 @@ Cargo のワークスペースにし、責務ごとにクレートを分ける�
 | `walk-flybrain` | ハエ脳（[04](04-reflex-layer.md)、フェーズ3） | 未定 D-06 | `walk-core` |
 | `walk-app` | 起動、設定と文章の読み込み、ループ、非常停止（実行ファイル） | ファイル・時計・端末 | 上のすべて |
 | `walk-testing` | Fake と、テスト用の偽の時計（`dev-dependencies` 専用） | なし | `walk-core` |
+| `walk-experiments` | 人が実験で使う道具（`experimentals/`）。本体ではない | 実験ごと（シリアル・HTTP） | ワークスペースのクレートには依存しない |
 
 - `walk-testing` は `walk-core` に依存するので、`walk-core` 自身のテストでは使わない（循環になる）。`walk-core` のテストは純粋関数を直接呼ぶので Fake が要らない。Fake を使うテストは、殻のクレートの `tests/` に置く。
 

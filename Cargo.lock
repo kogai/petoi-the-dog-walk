@@ -429,6 +429,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "walk-experiments"
+version = "0.0.0"
+
+[[package]]
 name = "wasip2"
 version = "1.0.4+wasi-0.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"

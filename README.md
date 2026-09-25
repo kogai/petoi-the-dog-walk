@@ -17,6 +17,7 @@
 |---|---|
 | [docs/design/](docs/design/) | 設計書（概要、構成、各層、調停、通信、決定事項、確認済みの事実） |
 | [docs/rules/](docs/rules/) | 開発ルール（コード、テスト、静的検査、レビュー、Git、文書、公開リポジトリ） |
+| [experimentals/](experimentals/) | 人に依頼する実験の手順書と結果 |
 | `crates/` | 本体（Rust のワークスペース）。`walk-core` は純粋な核 |
 | `xtask/` | コンパイラで表せない検査（クレートの依存の境界、プロファイル） |
 | `scripts/check.sh` | CI と同じ検査を手元で実行する |

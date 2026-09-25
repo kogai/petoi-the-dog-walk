@@ -15,7 +15,7 @@ Check each changed experiment file:
 3. Decision value: the purpose names which decision (D-xx) or design section it informs; the 判定基準 table maps each plausible outcome to a concrete design consequence.
 4. Recording: the 記録すること checklist captures raw output, not just a summary, and asks for environment details (firmware version, connection method).
 5. Safety: physical movement steps include precautions and a way to stop; no step asks the human to paste secrets.
-6. Consistency: experimentals/README.md table matches the files (ID, status, priority).
+6. Consistency: experimentals/README.md table matches the files (ID, link, status) and the experiment list in docs/design/07-roadmap.md.
 
 Also flag, as a blocker, anything that exposes secrets or local-environment details in this public repository (docs/rules/public-repo.md).
 
