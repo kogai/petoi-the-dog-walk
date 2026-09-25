@@ -14,8 +14,8 @@ run() {
 pinned() { sed -nE "s/^$1 = .*version = \"([^\"]+)\".*/\1/p; s/^\"?$1\"? = \"([^\"]+)\"/\1/p" mise.toml | head -n 1; }
 want_rust=$(pinned rust)
 want_cov=$(pinned 'cargo:cargo-llvm-cov')
-have_rust=$(rustc --version 2>/dev/null | awk '{print $2}')
-have_cov=$(cargo llvm-cov --version 2>/dev/null | awk '{print $2}')
+have_rust=$(rustc --version 2>/dev/null | awk '{print $2}' || true)
+have_cov=$(cargo llvm-cov --version 2>/dev/null | awk '{print $2}' || true)
 if [[ -z "$want_rust" || -z "$want_cov" ]]; then
   echo "check: cannot read tool versions from mise.toml" >&2
   exit 1
