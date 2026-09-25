@@ -42,6 +42,10 @@ Mac から Bittle へトークンを送ったとき、Bittle が何を返すか�
 コマンドは、リポジトリのルート（`Cargo.toml` がある場所）で実行する。
 各手順の出力は `experimentals/raw/` に保存する（このフォルダはコミットされない）。
 道具の出力は `E00_LOG=<ファイル>` を付けると、画面とファイルの両方に書かれる（`tee` は使わない。`Ctrl-C` のときに出力が失われるため）。
+`experimentals/raw/` は clone した直後には無い。道具は自分で作るが、手順 B の前には次を実行しておく。
+```sh
+mkdir -p experimentals/raw
+```
 
 ### A. シリアル経路（USB / Bluetooth）
 
