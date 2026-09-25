@@ -1,0 +1,17 @@
+[package]
+name = "walk-core"
+description = "Pure decision core: types, arbitration, skills. No I/O, no dependencies."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# walk-core must not have dependencies (checked by scripts/check.sh).
+[dependencies]
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true
