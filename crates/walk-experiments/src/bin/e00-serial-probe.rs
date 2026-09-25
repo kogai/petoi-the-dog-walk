@@ -101,8 +101,16 @@ fn spawn_reader(mut reader: Box<dyn serialport::SerialPort>, start: Instant, log
     });
 }
 
+/// Creates the log file, and its folder if needed (`experimentals/raw/` is not in the repository).
 fn open_log(path: Option<&str>) -> io::Result<Option<File>> {
-    path.map(File::create).transpose()
+    path.map(|p| {
+        let path = std::path::Path::new(p);
+        if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
+            std::fs::create_dir_all(dir)?;
+        }
+        File::create(path)
+    })
+    .transpose()
 }
 
 fn probe(probe: &Probe) -> ExitCode {
