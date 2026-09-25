@@ -31,6 +31,7 @@
 | `next_action` | Choice | 次の動作（選択肢は `Action` と、定義済みスキル） |
 
 - Choice の選択肢の説明（`criteria`）は人が書く。
+- Choice の `probabilities` は判断には使わず、ログにだけ残す（調停は `choice` と `confidence` で行う。必要になったら `ReasonedDecision` に足す）。
 - Choice の答えの名前が `Action` やスキルに無い場合は、判断無しとして扱う（例外を投げてループを止めない）。
 
 設計スケッチ（未実行。SDK の書き方は公式ドキュメントの例に基づく）:
@@ -62,4 +63,5 @@ with TypeSafeClient() as client:
 ## 5. 未確認・実験
 
 - E05: 日本語の性格文がどこまで効くか（英訳との比較）。
-- SDK の非同期 API の有無（未確認）。無ければスレッドで包む。
+- D-10: SDK に非同期 API があるか（未確認）。無ければスレッドで包む。
+- `system_one` の呼び方と `answers` の構造は、公式ドキュメントの例から書いたもので **未実行**。E05 で確かめる。

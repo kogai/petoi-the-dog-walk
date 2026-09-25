@@ -7,7 +7,7 @@
 
 ## 目的
 
-Python API の `readAnalogValue(pin)` が標準ファームで動くかを確かめる。Grove G2（A2/A3、F-B3）のセンサーを `sensing` に使えるかが決まる。
+Python API の `readAnalogValue(pin)` が標準ファームで動くかを確かめる。Grove G2（A2/A3、F-B3）のセンサーを `sensing` に使えるかが決まる（D-02 の候補）。`readAnalogValue` は facts.md に無く **未確認**。依頼中に上げるときに判定基準を足す。
 
 ## 必要なもの
 

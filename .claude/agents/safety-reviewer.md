@@ -15,7 +15,7 @@ Check:
 3. Rate and repetition: minimum send interval and no-repeat rules from 06-transport.md are enforced and tested.
 4. Timeouts: every network or serial call has a timeout; a hung Jev call cannot block the reflex/arbiter tick.
 5. Arbitration: the SAFETY rule (if present, D-01) is evaluated first and cannot be overridden by instructions or personality text.
-6. Secrets: no API keys, IP addresses, serial numbers or personal data in code, fixtures, logs or docs.
+6. Public repository: no API keys, IP addresses, serial port / device / host / user names, home-directory paths, serial numbers or personal data in code, fixtures, logs, experiment results or docs (docs/rules/public-repo.md). `scripts/check-public.sh` catches only some of these; read the diff.
 
 Report each finding as:
 

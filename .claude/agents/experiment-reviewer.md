@@ -17,6 +17,8 @@ Check each changed experiment file:
 5. Safety: physical movement steps include precautions and a way to stop; no step asks the human to paste secrets.
 6. Consistency: experimentals/README.md table matches the files (ID, status, priority).
 
+Also flag, as a blocker, anything that exposes secrets or local-environment details in this public repository (docs/rules/public-repo.md).
+
 Report each finding as:
 
 ```

@@ -18,6 +18,8 @@ Check, in this order:
 
 You may run `./scripts/check.sh` and read-only git commands. Do not run tests marked `jev` or `hardware`.
 
+Also flag, as a blocker, anything that exposes secrets or local-environment details in this public repository (docs/rules/public-repo.md).
+
 Report each finding as:
 
 ```

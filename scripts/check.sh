@@ -8,8 +8,9 @@ run() {
   "$@"
 }
 
+run scripts/check-public.sh
 run uv lock --check
 run uv run --frozen ruff format --check
 run uv run --frozen ruff check
 run uv run --frozen mypy
-run uv run --frozen pytest "$@"
+HYPOTHESIS_PROFILE=ci run uv run --frozen pytest --cov "$@"

@@ -4,7 +4,7 @@
 
 - **理性層**: TypeSafe の [Jev](https://docs.typesafe.ai/introduction) が、人の書いた自由文（性格・スキル・その場の指示）を読んで次の動作を選ぶ。
 - **反射層**: maleCNS コネクトームの [ハエ脳シミュレーション](https://github.com/lavallee/mk-jev-fly-brain) が、100ms ごとの速い反応を出す（後から追加。無くても動く）。
-- **優先順位**: その場の指示 ＞ 性格に基づく選択 ＞ 反射。判定は Jev ではなくコードで行う。
+- **優先順位**: 判定は Jev ではなくコードで行う。規則と未決定の点は [docs/design/05-arbitration.md](docs/design/05-arbitration.md)。
 
 ## 状態
 

@@ -13,16 +13,30 @@ Jev は主な学習言語が英語で、日本語は精度が下がる（F-J8）
 
 ## 必要なもの
 
-- TypeSafe の API キー（環境変数 `TYPESAFE_API_KEY` に設定する想定。**名前は未確認**。SDK の案内に従う）
+- TypeSafe の API キー。シェルで `export TYPESAFE_API_KEY=...` のように設定する（**変数名は未確認**。SDK の案内と違えばそちらに従う）。
+  **キーをスクリプトやファイルに書かない。** このリポジトリは公開されている
+- 費用: 36 回呼び出す。入力は1回あたり数百トークン程度なので、料金（10億トークンあたり42ドル、F-J7）ではごくわずかの見込み
 - Python 3.11 以上、`pip install "typesafe-sdk>=0.5.7" --extra-index-url https://pypi.typesafe.ai/`
 - 所要時間の目安: 30分
 
 ## 手順
 
-1. 下のスクリプトを `e05_jev_ja.py` として保存する（**未実行**。SDK の書き方は公式ドキュメントの例に基づく。
-   動かない場合は、エラーをそのまま結果に貼ってもらえれば、こちらで直す）。
-2. `python e05_jev_ja.py > e05_result.txt` を実行する。
+0. **実行する前に**、下の「期待する動作」の表を埋める（結果を見てから埋めると比較にならない）。
+1. 下のスクリプトを `experimentals/e05_jev_ja.py` として保存する（`.gitignore` 済みでコミットされない）。
+   **未実行**。SDK の書き方は公式ドキュメントの例に基づく。`system_one` の呼び方と `answers` の構造も **未確認**。
+   `instruction` に `None`（JSON の null）を入れてよいかも未確認。エラーになったら、エラーをそのまま結果に貼ってもらえれば、こちらで直す。
+2. `python experimentals/e05_jev_ja.py > experimentals/e05_result.txt 2>&1` を実行する。
 3. 出力をそのまま「結果」に貼る。API キーが出力に含まれていないことを確認する。
+
+### 期待する動作（実行前に依頼者が記入）
+
+`walk` / `back` / `sit` / `hello` / `balance` のどれかを書く。指示ありの列は「人が近づいたら座って」の場合。
+
+| 性格 | 状況 0: 知らない人が近づく（指示なし / あり） | 状況 1: 飼い主が呼ぶ（なし / あり） | 状況 2: 何も起きない（なし / あり） |
+|---|---|---|---|
+| shy |  /  |  /  |  /  |
+| friendly |  /  |  /  |  /  |
+| lazy |  /  |  /  |  /  |
 
 ```python
 import json
@@ -51,21 +65,36 @@ INSTRUCTIONS = {
     "ja": [None, "人が近づいたら座って。"],
     "en": [None, "Sit down when a person approaches."],
 }
-CRITERIA = {
-    "walk": "Walk forward",
-    "back": "Step backward",
-    "sit": "Sit down",
-    "hello": "Greet",
-    "balance": "Stand still",
-}
-
-questions = {
-    "instruction_applies": Noul(
-        instructions="The user's current instruction applies to the current situation."
-    ),
-    "next_action": Choice(
-        instructions="Which action should the robot take next?", criteria=CRITERIA
-    ),
+# 質問文と選択肢の説明も、言語ごとに用意する（ja 条件を日本語だけにするため）
+QUESTIONS = {
+    "en": {
+        "instruction_applies": Noul(
+            instructions="The user's current instruction applies to the current situation."
+        ),
+        "next_action": Choice(
+            instructions="Which action should the robot take next?",
+            criteria={
+                "walk": "Walk forward",
+                "back": "Step backward",
+                "sit": "Sit down",
+                "hello": "Greet",
+                "balance": "Stand still",
+            },
+        ),
+    },
+    "ja": {
+        "instruction_applies": Noul(instructions="ユーザーのその場の指示は、今の状況に当てはまる。"),
+        "next_action": Choice(
+            instructions="ロボットが次にとるべき動作はどれか。",
+            criteria={
+                "walk": "前に歩く",
+                "back": "後ろに下がる",
+                "sit": "座る",
+                "hello": "挨拶する",
+                "balance": "その場に立っている",
+            },
+        ),
+    },
 }
 
 with TypeSafeClient() as client:
@@ -78,7 +107,7 @@ with TypeSafeClient() as client:
                         "situation": situation,
                         "instruction": instruction,
                     }
-                    r = client.system_one(state=state, questions=questions)
+                    r = client.system_one(state=state, questions=QUESTIONS[lang])
                     a = r.answers
                     print(json.dumps({
                         "personality": p_name,
@@ -101,13 +130,16 @@ with TypeSafeClient() as client:
 
 ## 判定基準
 
-同じ性格・状況・指示の組で、`ja` と `en` を比べる。
+同じ性格・状況・指示の組（18組）で、`ja` と `en` を比べる。「期待どおり」は、実行前に埋めた表と `choice` が一致すること。
 
 | 結果 | 設計への影響（D-04） |
 |---|---|
-| `choice` がほぼ一致し、`confidence` の差も小さい | 日本語のまま渡す |
-| `en` のほうが直感に合う選択が明らかに多い | 英訳して渡す。英訳の方法（人が書く／機械翻訳）を別に決める |
-| 指示の Noul が `ja` で低く出る | 少なくとも指示文は英訳する |
+| `ja` の期待どおりが `en` の期待どおりより 2 組以上少なくない、かつ `ja` と `en` の `choice` 一致が 15 組以上 | 日本語のまま渡す |
+| `ja` の期待どおりが `en` より 3 組以上少ない | 英訳して渡す。英訳の方法（人が書く／機械翻訳）を別に決める |
+| 指示ありの組（状況 0）の Noul が、`ja` で `en` より 0.2 以上低い | 少なくとも指示文は英訳する |
+| 上のどれにも当てはまらない（差が小さいが一致が少ない など） | 判定保留。性格文を増やして再実験するかを相談する |
+
+この数値は目安。結果を見て変える場合は、理由を「判定」に書く。
 
 ## 結果（実施者が記入）
 

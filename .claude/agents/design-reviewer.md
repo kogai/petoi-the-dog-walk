@@ -16,6 +16,8 @@ Check:
 4. Open questions: new ambiguities introduced by the change are recorded in decisions.md or as an experiment, not silently resolved in code.
 5. Roadmap: the change fits the current phase in 07-roadmap.md, or the roadmap was updated.
 
+Also flag, as a blocker, anything that exposes secrets or local-environment details in this public repository (docs/rules/public-repo.md).
+
 Report each finding as:
 
 ```

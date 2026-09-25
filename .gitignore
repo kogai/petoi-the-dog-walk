@@ -10,3 +10,15 @@ htmlcov/
 dist/
 .env
 .env.*
+
+# Local-only files (docs/rules/public-repo.md)
+.DS_Store
+*.local.*
+.claude/settings.local.json
+.idea/
+.vscode/
+*.log
+# Raw experiment outputs: redact before pasting into experimentals/*.md
+experimentals/**/*.txt
+experimentals/**/*.py
+experimentals/**/*.csv

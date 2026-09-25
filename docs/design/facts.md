@@ -18,7 +18,14 @@
 | F-B6 | Python API（PetoiRobot）に `sendSkillStr('ksit', 3)` や `autoConnect()` などがある。立つ姿勢の例は `kup` |
 | F-B7 | 頭部にカメラらしきものが付いている（型番は未確認。深掘りしない方針） |
 
-出典: Serial Protocol、Python API、NyBoard V1_1 & V1_2、WiFi module ESP8266（Petoi 公式ドキュメント）
+出典（Petoi 公式ドキュメント）:
+- F-B1〜F-B3: [NyBoard V1_1 & V1_2](https://docs.petoi.com/nyboard/nyboard-v1_1-and-nyboard-v1_2.md)、[Extensible modules: Introduction](https://docs.petoi.com/extensible-modules/introduction.md)
+- F-B4: [Serial Protocol](https://docs.petoi.com/apis/serial-protocol.md)
+- F-B5: [WiFi module ESP8266](https://docs.petoi.com/communication-modules/wifi-esp8266.md)、[ESP8266 + Python Scripts](https://docs.petoi.com/communication-modules/wifi-esp8266/esp8266-+-python-scripts-implement-wireless-crowd-control.md)
+- F-B6: [Python API](https://docs.petoi.com/apis/python-api.md)
+- F-B7: 目視（型番は未確認）
+
+> 事実ごとの出典の対応は、計画書の時点で記録されていなかった。上は文書の範囲から当てたもの。個々の事実を設計の根拠にするときは、該当ページで確かめ直し、この対応を直す。
 
 ## 動作トークン（F-T1、公式 `actions.h` で確認済み）
 
@@ -60,7 +67,13 @@
 | F-J7 | Python SDK は `typesafe-sdk`。`pip install "typesafe-sdk>=0.5.7" --extra-index-url https://pypi.typesafe.ai/`。アーリーアクセス。入力トークンは10億あたり42ドル |
 | F-J8 | 公式が挙げる弱点（jev-1.13）: 文字どおりに解釈する／主な学習言語は英語で他言語は精度が下がる／無関係な情報が多いと精度が落ちる／矛盾・間接的な指示が苦手／数の計算・日付比較が苦手／敵対的な文章に動かされることがある／文章生成に向かない |
 
-出典: TypeSafe ドキュメント（Introduction、State、Choice、Skill suggestion、Jev 1.13 jaggedness）
+出典（TypeSafe ドキュメント）:
+- F-J1: [Introduction](https://docs.typesafe.ai/introduction)
+- F-J2: [State](https://docs.typesafe.ai/concepts/state.md)
+- F-J3〜F-J5: [Choice](https://docs.typesafe.ai/primitives/choice.md)、[Introduction](https://docs.typesafe.ai/introduction)
+- F-J6、F-J7（SDK）: [Skill suggestion](https://docs.typesafe.ai/cookbooks/skill_suggestion.md)
+- F-J7（料金・アーリーアクセス）: [TypeSafe AI](https://typesafe.ai/)
+- F-J8: [Jev 1.13 jaggedness](https://docs.typesafe.ai/model-jaggedness/jev-1.13.md)
 
 ## ハエ脳（mk-jev-fly-brain）
 
@@ -73,5 +86,7 @@
 | F-F5 | 格闘ゲームでの強みは反応速度。Jev の応答（README では約350ms）に合わせて遅くすると、与ダメージが70%減った |
 | F-F6 | hybrid モードがあり、速い局所ポリシーが動き、Jev が遅れて修正・教師役を務める |
 | F-F7 | ハエ脳 vs ルールボットは、アカウントなしで動く（`python server.py`） |
+| F-F8 | 出力される動きは7種類: `stand`, `walk_forward`, `walk_backward`, `jump_away`, `punch`, `kick`, `block`。運動ニューロン群との対応は fwd→walk_forward、back→walk_backward、jump→jump_away、punch→punch、kick→kick、wing→block（`fight.js` の `ACTIONS` と `POOL_ACTION`） |
+| F-F9 | `server.py` は Flask で、ページの配信、TypeSafe API の中継（キーをブラウザに渡さないため）、試合記録の JSON 保存を行う。シミュレーション本体はブラウザ側で動く（`server.py` の docstring とルート定義） |
 
-出典: [lavallee/mk-jev-fly-brain](https://github.com/lavallee/mk-jev-fly-brain)、[fight.js](https://raw.githubusercontent.com/lavallee/mk-jev-fly-brain/main/mk/fight.js)
+出典: [lavallee/mk-jev-fly-brain](https://github.com/lavallee/mk-jev-fly-brain)（README、[server.py](https://raw.githubusercontent.com/lavallee/mk-jev-fly-brain/main/server.py)）、[fight.js](https://raw.githubusercontent.com/lavallee/mk-jev-fly-brain/main/mk/fight.js)（F-F8、F-F9 は 2026-09-25 に main ブランチのコードで確認）

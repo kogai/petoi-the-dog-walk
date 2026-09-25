@@ -18,8 +18,16 @@
 | Jev 実 API | `@pytest.mark.jev` | 本物の Jev を呼ぶ | しない（API キーがある手元だけ） |
 | 実機 | `@pytest.mark.hardware` | 本物の Bittle を動かす | しない（人が実行し `experimentals/` に記録） |
 
-`jev`・`hardware` マーカーのテストは、既定では実行しない（`pyproject.toml` の `addopts`）。
-実行するときは `uv run pytest -m jev` のように明示する。
+`jev`・`hardware` マーカーのテストは、オプションを付けたときだけ実行する（`tests/conftest.py`）。
+`-m` の指定では有効にならないので、別の `-m` 式を使っても誤って実 API・実機を動かさない。
+
+```sh
+uv run pytest --run-jev -m jev            # 本物の Jev（API キーが必要）
+uv run pytest --run-hardware -m hardware  # 本物の Bittle（人が実行）
+```
+
+- テストのディレクトリには同じ名前のファイルがあってもよい（`--import-mode=importlib`）。
+- 警告はエラーとして扱う（`filterwarnings = ["error"]`）。
 
 ## 3. Fake と fixture の決まり
 
@@ -27,11 +35,12 @@
 - Fake の振る舞いは、実験で記録した実際の応答に合わせる。根拠の実験 ID を docstring に書く。
 - 記録済み応答は `tests/fixtures/<相手>/` に置く。API キー・IP アドレスなどは含めない。
 - 時計・乱数は注入する。テストの中で `time.sleep` しない。
+- hypothesis は CI（`scripts/check.sh`）では `HYPOTHESIS_PROFILE=ci` で seed を固定する。手元では既定の `dev` プロファイル（ランダム）で回し、見つかった反例は `@example` で固定する。
 
 ## 4. カバレッジ
 
-- `pytest --cov` でブランチカバレッジを測る。
-- 全体の下限は 80%（`pyproject.toml` の `fail_under`）。
+- `scripts/check.sh` がブランチカバレッジを測る（`pytest --cov`）。1ファイルだけ実行するときは測らないので、下限で落ちない。
+- 全体の下限は 80%（`pyproject.toml` の `[tool.coverage.report] fail_under`）。
 - `arbiter` と `domain` はブランチカバレッジ 100% を目標にする。
 - 本物の I/O 実装（`SerialTransport` など）の I/O 部分は、`# pragma: no cover` ではなく契約テストでカバーする。どうしても無理な行だけ、理由をコメントして除外する。
 

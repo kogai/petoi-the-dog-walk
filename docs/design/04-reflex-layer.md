@@ -8,13 +8,15 @@
 
 ## 2. 出力の対応（設計案）
 
-| ハエの動き | Bittle |
+ハエ脳の出力は7種類（F-F8）。
+
+| ハエの動き（運動ニューロン群） | Bittle |
 |---|---|
-| stand | `kbalance`（または `kup`） |
-| walk_forward | `kwkF` |
-| walk_backward | `kbk` |
-| jump_away | 対応スキル未確認（代替案: `kbk` か `krnF`）→ D-07 |
-| punch / kick / block | 対応する動作が確認できていない → D-07 |
+| stand（どの群も閾値未満） | `kbalance`（または `kup`） |
+| walk_forward（fwd） | `kwkF` |
+| walk_backward（back） | `kbk` |
+| jump_away（jump） | 対応スキル未確認（代替案: `kbk` か `krnF`）→ D-07 |
+| punch（punch）/ kick（kick）/ block（wing） | 対応する動作が確認できていない → D-07 |
 
 ## 3. 感覚入力（未確認）
 
@@ -29,7 +31,8 @@ Jev の答え（Score や Noul）を、群ごとの閾値・ゲイン（F-F3）�
 
 ## 5. 実行方法（未決定 D-06）
 
-公式実装はブラウザの JavaScript（F-F1）。選択肢:
+公式実装のシミュレーションはブラウザの JavaScript で動き、`server.py` は配信・Jev の中継・記録だけを行う（F-F1、F-F9）。
+そのため `server.py` をそのまま Python から呼んでも、シミュレーションは使えない。選択肢:
 
 | 案 | 内容 | 利点 | 欠点 |
 |---|---|---|---|
