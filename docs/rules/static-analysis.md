@@ -12,7 +12,7 @@
 | 依存の境界 | `cargo xtask deps`。照合の表は `xtask/src/main.rs` にあり、`cargo metadata` で各クレートの依存を読み、[02-architecture.md](../design/02-architecture.md) 2節の「依存してよいもの」と照合する（`walk-core` は通常・ビルドの依存を持たない、`walk-testing` は dev-dependencies からだけ、`walk-core` の dev-dependencies に `walk-testing` を入れない（循環）など）。照合するのはワークスペース内のクレートどうしの依存だけで、外部クレートの選び方はレビューで見る | 依存を外す。設計を変えるなら設計書と照合の表を直す |
 | プロファイル | `cargo xtask profiles`。マニフェストと `.cargo/config.toml` に `panic = "abort"`（rustflags の `panic=abort` を含む）が無いこと（[coding.md](coding.md) 3節）。環境変数 `CARGO_PROFILE_*_PANIC` は見ない | 消す |
 | lint の適用 | `cargo xtask lints`。どのクレートも `[lints] workspace = true` を書いていること（書き忘れると、そのクレートで lint が黙って無効になる） | 書く |
-| テストとカバレッジ | `cargo llvm-cov --workspace --exclude xtask --fail-under-lines 80`（既定のテストを実行し、行カバレッジの下限を強制する。`xtask` は検査用の道具なので、テストは別に実行し、カバレッジには数えない） | 直す・テストを足す |
+| テストとカバレッジ | `cargo llvm-cov --workspace --exclude xtask --exclude walk-experiments --fail-under-lines 80`（既定のテストを実行し、行カバレッジの下限を強制する。`xtask` と `walk-experiments` は道具なので、テストは別に実行し、カバレッジには数えない。道具でも、純粋な部分は単体テストを書く） | 直す・テストを足す |
 
 ツールチェーンのバージョンは `rust-toolchain.toml` で固定する。
 

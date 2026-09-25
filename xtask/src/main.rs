@@ -33,6 +33,7 @@ const ALLOWED_WORKSPACE_DEPS: &[(&str, Option<&[&str]>)] = &[
         Some(&["walk-core", "walk-jev", "walk-bittle", "walk-flybrain"]),
     ),
     ("walk-testing", Some(&["walk-core"])),
+    ("walk-experiments", Some(&[])),
     ("xtask", Some(&[])),
 ];
 
