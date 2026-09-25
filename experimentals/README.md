@@ -12,7 +12,7 @@
 | E01 | [E01-imu-readout.md](E01-imu-readout.md) | 依頼中 |
 | E02 | — | 未依頼 |
 | E04 | [E04-wifi-raw-command.md](E04-wifi-raw-command.md) | 依頼中 |
-| E05 | — | 未依頼 |
+| E05 | [E05-jev-japanese.md](E05-jev-japanese.md) | 依頼中 |
 | E06 | — | 未依頼 |
 | E07 | — | 未依頼 |
 | E08 | — | 未依頼 |
