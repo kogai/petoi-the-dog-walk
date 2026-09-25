@@ -16,6 +16,21 @@
 | 場所 | 内容 |
 |---|---|
 | [docs/design/](docs/design/) | 設計書（概要、構成、各層、調停、通信、決定事項、確認済みの事実） |
+| [docs/rules/](docs/rules/) | 開発ルール（コード、テスト、静的検査、レビュー、Git、文書、公開リポジトリ） |
+| `crates/` | 本体（Rust のワークスペース）。`walk-core` は純粋な核 |
+| `xtask/` | コンパイラで表せない検査（クレートの依存の境界、プロファイル） |
+| `scripts/check.sh` | CI と同じ検査を手元で実行する |
+
+## 開発
+
+必要なもの: [rustup](https://rustup.rs/)（`rust-toolchain.toml` のバージョンを自動で入れる）、cargo-llvm-cov
+
+```sh
+cargo install cargo-llvm-cov --version 0.9.1 --locked
+./scripts/check.sh   # 公開内容 / fmt / clippy / doc / 依存の境界 / プロファイル / テストとカバレッジ
+```
+
+ルールは [docs/rules/](docs/rules/)、AI エージェント向けの要約は [CLAUDE.md](CLAUDE.md)。
 
 ## 参考リンク
 

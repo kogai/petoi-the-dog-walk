@@ -10,3 +10,5 @@
 *.log
 # Raw experiment output: keep it here, redact, then paste into experimentals/E*.md
 experimentals/raw/
+# Build output
+target/
