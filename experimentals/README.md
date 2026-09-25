@@ -9,7 +9,7 @@
 | ID | 手順書 | 状態 |
 |---|---|---|
 | E00 | [E00-connectivity.md](E00-connectivity.md) | 依頼中 |
-| E01 | — | 未依頼 |
+| E01 | [E01-imu-readout.md](E01-imu-readout.md) | 依頼中 |
 | E02 | — | 未依頼 |
 | E04 | — | 未依頼 |
 | E05 | — | 未依頼 |
