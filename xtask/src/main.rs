@@ -225,12 +225,19 @@ fn rustflags_abort(config: &toml::Table) -> bool {
     let flags = |table: Option<&toml::Value>| -> Vec<String> {
         table
             .and_then(|t| t.get("rustflags"))
-            .and_then(toml::Value::as_array)
-            .map(|a| {
-                a.iter()
+            .map(|v| match v {
+                // Cargo accepts both `rustflags = ["-C", "panic=abort"]` and a plain string.
+                toml::Value::Array(a) => a
+                    .iter()
                     .filter_map(toml::Value::as_str)
                     .map(str::to_owned)
-                    .collect()
+                    .collect(),
+                toml::Value::String(text) => vec![text.clone()],
+                toml::Value::Integer(_)
+                | toml::Value::Float(_)
+                | toml::Value::Boolean(_)
+                | toml::Value::Datetime(_)
+                | toml::Value::Table(_) => Vec::new(),
             })
             .unwrap_or_default()
     };
@@ -432,9 +439,14 @@ mod tests {
         let config: toml::Table = "[build]\nrustflags = [\"-C\", \"panic=abort\"]\n"
             .parse()
             .unwrap();
+        let as_string: toml::Table =
+            "[target.x86_64-apple-darwin]\nrustflags = \"-C panic=abort\"\n"
+                .parse()
+                .unwrap();
         let clean: toml::Table = "[alias]\nxtask = \"run\"\n".parse().unwrap();
 
         assert!(rustflags_abort(&config));
+        assert!(rustflags_abort(&as_string));
         assert!(!rustflags_abort(&clean));
     }
 
