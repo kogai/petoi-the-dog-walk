@@ -13,7 +13,7 @@
  │                                                                │
  │  sensing ──Observation──┬──▶ reasoner (Jev, 別スレッド) ─ReasonedDecision─┐
  │     ▲                   │                                                 ▼
- │     │                   └──▶ reflex (ハエ脳)  ──ReflexOutput──────▶ arbitrate ──Action──▶ executor
+ │     │                   └──▶ reflex (ハエ脳)  ──ReflexOutput──────▶ arbitrate ──Command─▶ executor
  │     │                                                              (純粋関数)              │
  │     └──────────────────────────── transport ◀──────────── Token 列 ◀─────────────────────┘
  └───────────────────────────────┬────────────────────────────────┘
@@ -106,7 +106,7 @@ pub trait Transport {
 - 理性層の所要時間は、cookbook の例で 0.09〜0.31 秒（F-J6）、fly-brain の README では約350ms（F-F5）。このシステムではまだ測っていない。
   100ms 周期を超えうるので、理性層は別スレッドで回し、結果をチャネルで送る。ループは最新の結果だけを使う。
 - 非同期ランタイム（tokio など）は使わない。標準のスレッドとチャネルで足りる。
-- 各判断には時刻（`Millis`）を付け、古い判断は調停で捨てる（有効期限は D-03）。
+- 各判断には時刻（`Millis`）を付け、古い判断は調停で捨てる（有効期限は `ArbiterPolicy` の `ttl`。[05](05-arbitration.md) の P3）。
 - 時計は `walk-app` だけが読み、値として `walk-core` に渡す。テストでは偽の時計を使い、実時間を待たない。
 
 ## 5. 失敗時の振る舞い
