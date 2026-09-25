@@ -9,6 +9,7 @@
 .vscode/
 *.log
 # Raw experiment output: keep it here, redact, then paste into experimentals/E*.md
-experimentals/raw/
+experimentals/raw/*
+!experimentals/raw/.gitkeep
 # Build output
 target/

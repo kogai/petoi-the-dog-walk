@@ -22,7 +22,7 @@
 ## 手順
 
 コマンドは、リポジトリのルート（`Cargo.toml` がある場所）で実行する前提で書く。
-生の出力は `experimentals/raw/` に保存する（コミットされない）。
+生の出力は `experimentals/raw/` に保存する（中身はコミットされない。フォルダは clone した時点である）。
 
 1. （**未実行**）`cargo run --release -p walk-experiments --bin eXX-<名前> -- <PORT> <トークン>` のように、確かめていないものには印を付ける
 2.
