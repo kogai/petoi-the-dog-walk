@@ -18,10 +18,9 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      # rustup reads rust-toolchain.toml and installs the pinned toolchain and components.
-      - run: rustup toolchain install
-      - uses: Swatinem/rust-cache@v2
-      - uses: taiki-e/install-action@v2
+      # mise installs the tools pinned in mise.toml (Rust with its components, cargo-llvm-cov).
+      - uses: jdx/mise-action@v2
         with:
-          tool: cargo-llvm-cov@0.9.1
-      - run: scripts/check.sh
+          cache: true
+      - uses: Swatinem/rust-cache@v2
+      - run: mise run check

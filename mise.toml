@@ -1,0 +1,9 @@
+# Tool versions for this repository (decision D-12). Install with `mise install`,
+# run every check with `mise run check`. This file is the only place versions are pinned.
+[tools]
+rust = { version = "1.94.1", components = "rustfmt,clippy,llvm-tools", profile = "minimal" }
+"cargo:cargo-llvm-cov" = "0.9.1"
+
+[tasks.check]
+description = "Run every check that CI runs (docs/rules/static-analysis.md)"
+run = "scripts/check.sh"

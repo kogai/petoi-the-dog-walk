@@ -1,5 +1,0 @@
-# Pinned toolchain (docs/rules/static-analysis.md). rustup installs it automatically.
-[toolchain]
-channel = "1.94.1"
-components = ["rustfmt", "clippy", "llvm-tools"]
-profile = "minimal"

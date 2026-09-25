@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Runs every check that CI runs. See docs/rules/static-analysis.md.
-# Needs: the toolchain in rust-toolchain.toml (rustup installs it) and cargo-llvm-cov
-# (`cargo install cargo-llvm-cov --version 0.9.1 --locked`). Takes no arguments.
+# Tools come from mise.toml: run `mise install`, then `mise run check` (or this script inside a
+# shell where mise is activated). Takes no arguments.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -10,8 +10,20 @@ run() {
   "$@"
 }
 
-if ! cargo llvm-cov --version >/dev/null 2>&1; then
-  echo "cargo-llvm-cov is missing: cargo install cargo-llvm-cov --version 0.9.1 --locked" >&2
+# The tools must be the versions pinned in mise.toml, so local results match CI.
+pinned() { sed -nE "s/^$1 = .*version = \"([^\"]+)\".*/\1/p; s/^\"?$1\"? = \"([^\"]+)\"/\1/p" mise.toml | head -n 1; }
+want_rust=$(pinned rust)
+want_cov=$(pinned 'cargo:cargo-llvm-cov')
+have_rust=$(rustc --version 2>/dev/null | awk '{print $2}')
+have_cov=$(cargo llvm-cov --version 2>/dev/null | awk '{print $2}')
+if [[ -z "$want_rust" || -z "$want_cov" ]]; then
+  echo "check: cannot read tool versions from mise.toml" >&2
+  exit 1
+fi
+if [[ "$have_rust" != "$want_rust" || "$have_cov" != "$want_cov" ]]; then
+  echo "check: need rustc $want_rust and cargo-llvm-cov $want_cov (mise.toml);" \
+    "found rustc ${have_rust:-none} and cargo-llvm-cov ${have_cov:-none}." >&2
+  echo "check: run 'mise install' and then 'mise run check'." >&2
   exit 1
 fi
 

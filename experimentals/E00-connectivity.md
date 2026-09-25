@@ -19,8 +19,8 @@ Mac から Bittle へトークンを送ったとき、Bittle が何を返すか�
 - 機材: Bittle（標準ファーム）、手持ちの接続手段（USB アダプタ / Bluetooth ドングル / ESP8266 のどれか）
 - ソフトウェア（シリアル経路）:
   - Xcode Command Line Tools（Rust のビルドに要る。入っていなければ `xcode-select --install`）
-  - [rustup](https://rustup.rs/)。入れた後は、新しいターミナルを開くか `source "$HOME/.cargo/env"` を実行する
-  - このリポジトリを clone しておく（Rust のツールチェーンは初回のビルドで自動的に入る）
+  - [mise](https://mise.jdx.dev/)（例: `brew install mise`）。シェルで有効にしておく（zsh なら `echo 'eval "$(mise activate zsh)"' >> ~/.zshrc` の後、新しいターミナルを開く）
+  - このリポジトリを clone し、そのフォルダで `mise trust && mise install` を実行しておく（Rust と道具が `mise.toml` の版で入る。初回は数分かかる）
 - ソフトウェア（Wi-Fi 経路）: `curl`（macOS に入っている）
 - 所要時間の目安: 40分
 

@@ -1,6 +1,6 @@
 # 静的検査
 
-すべて `scripts/check.sh` で一度に実行でき、CI も同じスクリプトを使う。設定はワークスペースの `Cargo.toml` の `[workspace.lints]` と、`rustfmt.toml`・`clippy.toml`・`rust-toolchain.toml` に置く。
+すべて `mise run check`（中身は `scripts/check.sh`）で一度に実行でき、CI も同じものを使う。設定はワークスペースの `Cargo.toml` の `[workspace.lints]` と、`rustfmt.toml`・`clippy.toml` に置く。
 
 | 検査 | ツール | 失敗したら |
 |---|---|---|
@@ -14,7 +14,7 @@
 | lint の適用 | `cargo xtask lints`。どのクレートも `[lints] workspace = true` を書いていること（書き忘れると、そのクレートで lint が黙って無効になる） | 書く |
 | テストとカバレッジ | `cargo llvm-cov --workspace --exclude xtask --exclude walk-experiments --fail-under-lines 80`（既定のテストを実行し、行カバレッジの下限を強制する。`xtask` と `walk-experiments` は道具なので、テストは別に実行し、カバレッジには数えない。道具でも、純粋な部分は単体テストを書く） | 直す・テストを足す |
 
-ツールチェーンのバージョンは `rust-toolchain.toml` で固定する。
+ツールのバージョン（Rust とその部品、cargo-llvm-cov）は `mise.toml` だけで固定する（D-12）。`scripts/check.sh` は、実際の `rustc` と `cargo-llvm-cov` の版が `mise.toml` と違えば、検査を始めずに失敗する。
 
 ## lint の方針
 
