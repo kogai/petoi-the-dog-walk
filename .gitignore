@@ -1,0 +1,12 @@
+# Secrets and local-only files (docs/rules/public-repo.md)
+.env
+.env.*
+!.env.example
+.DS_Store
+*.local.*
+.claude/settings.local.json
+.idea/
+.vscode/
+*.log
+# Raw experiment output: keep it here, redact, then paste into experimentals/E*.md
+experimentals/raw/

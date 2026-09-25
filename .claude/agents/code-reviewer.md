@@ -18,6 +18,8 @@ Check, in this order:
 
 You may run `./scripts/check.sh` and read-only git commands. Never run cargo test/run with `--features live-jev`, `--features live-hardware` or `--all-features`: those call the paid Jev API or move the real robot (compiling with clippy `--all-features` is fine).
 
+Also flag, as a blocker, anything that exposes secrets or local-environment details in this public repository (docs/rules/public-repo.md).
+
 Report each finding as:
 
 ```

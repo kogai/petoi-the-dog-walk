@@ -18,6 +18,8 @@ Check:
 6. Roadmap: the change fits the current phase in 07-roadmap.md, or the roadmap was updated.
 7. Scope: the PR does one thing (docs/rules/git-workflow.md). Flag unrelated changes mixed in.
 
+Also flag, as a blocker, anything that exposes secrets or local-environment details in this public repository (docs/rules/public-repo.md).
+
 Report each finding as:
 
 ```

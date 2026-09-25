@@ -1,0 +1,23 @@
+name: Public content check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check-public:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the history of the PR is scanned too
+      - name: Files in the tree
+        run: scripts/check-public.sh
+      - name: Lines added and commit messages in this PR
+        if: github.event_name == 'pull_request'
+        run: scripts/check-public.sh --range "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
