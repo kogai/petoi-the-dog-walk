@@ -11,7 +11,7 @@ Petoi Bittle を Jev（理性層）とハエ脳（反射層）で動かすプロ
 
 - 言語は Rust。Python は使わない。判断のロジックは `#![no_std]` の `walk-core` に純粋関数で書き、I/O は殻のクレートに閉じ込める（`docs/rules/coding.md`）。
 - `unwrap`・`expect`・`panic!`・`todo!`・`unimplemented!`・添字アクセス・`unsafe` を使わない（テストコードは除く）。失敗は `Result` で返す。非同期ランタイムは使わない（詳細は `docs/rules/coding.md` 3・4節）。
-- 変更のたびに `scripts/check.sh` を通す（fmt / clippy / doc / 依存の境界 / test）。
+- 開発環境は mise で管理する（`mise.toml`）。変更のたびに `mise run check` を通す（公開内容 / fmt / clippy / doc / 依存の境界 / test）。
 - 振る舞いを変えるときは、先にテストを書く。外部 I/O は trait の後ろに置き、Fake でテストする。
 - **1つの PR で行うことは1つにする**（`docs/rules/git-workflow.md` 3節）。ついでの修正を混ぜない。
 - 実機（Bittle）や Jev の API キーが要る確認は、自分で実行しない・「確認した」と書かない。
@@ -26,7 +26,7 @@ Petoi Bittle を Jev（理性層）とハエ脳（反射層）で動かすプロ
 ## よく使うコマンド
 
 ```sh
-./scripts/check.sh                                   # CI と同じ検査
+mise run check                                       # CI と同じ検査（scripts/check.sh）
 cargo test -p walk-core                              # 核のテストだけ
 ```
 

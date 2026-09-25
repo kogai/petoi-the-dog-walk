@@ -24,12 +24,14 @@
 
 ## 開発
 
-必要なもの: [rustup](https://rustup.rs/)（`rust-toolchain.toml` のバージョンを自動で入れる）、cargo-llvm-cov
+開発環境は [mise](https://mise.jdx.dev/) で管理する。ツールのバージョンは `mise.toml` だけに書いてある（Rust とその部品、cargo-llvm-cov）。
 
 ```sh
-cargo install cargo-llvm-cov --version 0.9.1 --locked
-./scripts/check.sh   # 公開内容 / fmt / clippy / doc / 依存の境界 / プロファイル / テストとカバレッジ
+mise trust && mise install   # 初回だけ
+mise run check               # 公開内容 / fmt / clippy / doc / 依存の境界 / プロファイル / テストとカバレッジ
 ```
+
+シェルで mise を有効にしておくと（`mise activate`）、このフォルダでは `cargo` などが `mise.toml` の版になる。
 
 ルールは [docs/rules/](docs/rules/)、AI エージェント向けの要約は [CLAUDE.md](CLAUDE.md)。
 
