@@ -12,7 +12,7 @@
 ## 確認
 
 - [ ] この PR は1つのことだけをしている（docs/rules/git-workflow.md 3節）
-- [ ] `scripts/check.sh` が通る（ハーネスがある場合）
+- [ ] `mise run check` が通る（ハーネスがある場合）
 - [ ] 振る舞いの変更にテストを足した
 - [ ] 実機・API キーが要る確認は `experimentals/` に依頼として書いた（自分で「確認した」と書いていない）
 

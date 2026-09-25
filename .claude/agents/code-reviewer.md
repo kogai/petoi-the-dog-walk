@@ -16,7 +16,7 @@ Check, in this order:
 4. Types and lints: no unwrap/expect/panic/indexing in non-test code; no wildcard arms on enum matches; lint exceptions use #[expect(..., reason = "...")] with a real reason; no unsafe.
 5. Simplicity: dead code, duplication, needless abstraction.
 
-You may run `./scripts/check.sh` and read-only git commands. Never run cargo test/run with `--features live-jev`, `--features live-hardware` or `--all-features`: those call the paid Jev API or move the real robot (compiling with clippy `--all-features` is fine).
+You may run `mise run check` and read-only git commands. Never run cargo test/run with `--features live-jev`, `--features live-hardware` or `--all-features`: those call the paid Jev API or move the real robot (compiling with clippy `--all-features` is fine).
 
 Also flag, as a blocker, anything that exposes secrets or local-environment details in this public repository (docs/rules/public-repo.md).
 

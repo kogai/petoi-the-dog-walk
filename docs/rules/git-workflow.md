@@ -10,7 +10,7 @@
 
 - 1コミット1つの目的。件名は英語の命令形で 72 文字以内（例: `Add arbiter with priority rules`）。
 - 本文に「なぜ」を書く。関係する設計 ID（D-03 など）や実験 ID（E00 など）があれば書く。
-- コミットの前に `scripts/check.sh` を通す。
+- コミットの前に `mise run check` を通す。
 
 ## 3. PR
 

@@ -14,7 +14,7 @@
 
 ## 変更1回ごとの最低条件（Definition of Done）
 
-1. `scripts/check.sh` が通る（整形・lint・ドキュメント・依存の境界・テスト）。
+1. `mise run check` が通る（整形・lint・ドキュメント・依存の境界・テスト）。
 2. 振る舞いを変えたら、それを確かめるテストがある。
 3. 設計と違うことをしたら、同じ PR で `docs/design/` を直す。
 4. [review.md](review.md) の必須レビューを通し、指摘への対応を PR に書く。

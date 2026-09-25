@@ -20,7 +20,8 @@
 | [experimentals/](experimentals/) | 人に依頼する実験の手順書と結果 |
 | `crates/` | 本体（Rust のワークスペース）。`walk-core` は純粋な核 |
 | `xtask/` | コンパイラで表せない検査（クレートの依存の境界、プロファイル） |
-| `scripts/check.sh` | CI と同じ検査を手元で実行する |
+| `mise.toml` | ツールのバージョンと、検査のタスク（`mise run check`） |
+| `scripts/check.sh` | CI と同じ検査の本体（`mise run check` から呼ぶ） |
 
 ## 開発
 
@@ -32,6 +33,7 @@ mise run check               # 公開内容 / fmt / clippy / doc / 依存の境�
 ```
 
 シェルで mise を有効にしておくと（`mise activate`）、このフォルダでは `cargo` などが `mise.toml` の版になる。
+エディタ（rust-analyzer など）も、mise を有効にしたシェルから起動する（そうしないと rustup の既定の版が使われ、検査の結果とずれることがある）。
 
 ルールは [docs/rules/](docs/rules/)、AI エージェント向けの要約は [CLAUDE.md](CLAUDE.md)。
 
