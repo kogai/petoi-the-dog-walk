@@ -5,7 +5,7 @@
 ## 1. 原則
 
 - 既定のテスト（`cargo test`）は速く、決定的で、ネットワークと実機を使わない。
-- 外部 I/O（Jev API、シリアル、HTTP、時計）は trait の後ろに置き、Fake に差し替えてテストする。
+- 外部 I/O（Jev API、シリアル、HTTP、時計）は trait の後ろに置き、Fake に差し替えてテストする。差し替える所は今は3つ（HTTP の境界の偽物は D-17 (4) の後で決める）: 境界の trait（Fake）、`Link`（`FakeLink`）、`Clock`（偽の時計）（[ADR-0001](../design/adr/0001-driver-layer.md) 2.5節）。
 - 振る舞いを足す・変えるときは、先に失敗するテストを書く（テスト先行）。
 - 「実機で動いた」は自動テストの代わりにならない。実機の確認は実験として記録する。
 
@@ -15,7 +15,7 @@
 |---|---|---|---|
 | 単体 | 各モジュールの `#[cfg(test)] mod tests` | 純粋関数（主に `walk-core`） | する |
 | プロパティ | 同上（proptest） | 不変条件（例: [05-arbitration.md](../design/05-arbitration.md) の P1〜P5） | する |
-| 契約 | 殻のクレートの `tests/` | Fake と本物の実装が同じ trait を同じように満たすか。記録済み応答（fixture）を本物のパーサーに通す | する |
+| 契約 | 殻のクレートの `tests/` | Fake と本物の実装が同じ trait を同じように満たすか。本物のドライバーに `FakeLink` を付け、記録済み応答（fixture）を流して手順を確かめる。実機を動かすドライバーは、ADR-0001 2.6節の安全の不変条件のうち S1・S3・S4・S5・S10・S11 を `FakeLink` で1つずつテストにする（S1 のうち `walk-app` が明示して `stop()` を呼ぶ部分は `walk-app` の結合テスト。S2・S6 は形が D-15・D-17 (6) で決まってから足す。S7 は型の定義をレビューで見る。S8 は HTTP の境界の偽物ができてから。S9 は `walk-app` の単体テスト（知らない値なら起動しない）で確かめる） | する |
 | 結合 | `walk-app/tests/` | Fake 一式でループを偽の時計で回す | する |
 | Jev 実 API | cargo feature `live-jev` を付けたときだけコンパイルされるテスト | 本物の Jev を呼ぶ | しない（API キーがある手元だけ） |
 | 実機 | cargo feature `live-hardware` を付けたときだけコンパイルされるテスト | 本物の Bittle を動かす | しない（人が実行し、実験として記録） |
@@ -31,9 +31,10 @@ cargo test -p walk-bittle --features live-hardware      # 本物の Bittle（人
 
 ## 3. Fake と fixture の決まり
 
-- Fake は `walk-testing` クレートに置き、本物と同じ trait を実装する。`dev-dependencies` からだけ使う。
+- Fake は `walk-testing` クレートに置き、本物と同じ trait を実装する。`dev-dependencies` からだけ使う。`FakeLink` もここに置く。
+- `FakeLink` は、決めたバイト列を、偽の時計の上の決めた時刻に返す。書かれたバイト列を記録し、テストで確かめられるようにする（例: 停止の後に、動かすトークンが書かれていない）。書き込みの失敗・時間切れ・途中までの書き込みを起こす設定も持つ（ADR-0001 S4）。
 - Fake の振る舞いは、実験で記録した実際の応答に合わせる。根拠の実験 ID をコメントに書く。
-- 記録済み応答は、そのクレートの `tests/fixtures/` に置く。API キー・IP アドレスなどは含めない。
+- 記録済み応答は、そのクレートの `tests/fixtures/` に置く。API キー・IP アドレス・ポート名などは含めない。実験の手順書に記録した出力（例: E00）を使うときは、出典の実験 ID と節を書く。
 - 時計・乱数は引数で渡す。テストの中で実時間を待たない（`thread::sleep` しない）。
 - proptest が見つけた反例は `proptest-regressions/` に保存されるので、コミットして回帰テストにする。
 
