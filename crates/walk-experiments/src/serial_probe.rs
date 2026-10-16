@@ -28,7 +28,13 @@ pub const LOOK_TIME: Duration = Duration::from_millis(1500);
 /// token `\n` with the argument `d`, not as a stop (inference from the `OpenCat` source,
 /// commit 24563ca, `src/io.h` `read_serial`; it matches the `\n\r\n` reply seen in E00).
 /// With the pause, the line ending is a token of its own and `d` arrives as the next one.
+/// Ten times the 5 ms (also read from that source, `src/OpenCat.h` `SERIAL_TIMEOUT`;
+/// **unverified** on the board), to allow for jitter in the USB serial adapter and the host.
 pub const STOP_GAP: Duration = Duration::from_millis(50);
+const _: () = assert!(STOP_GAP.as_millis() >= 10 * 5);
+
+/// Waits for the given time: `std::thread::sleep` in the tool, a recorder in tests.
+pub type Pause = fn(Duration);
 /// Extra time after the planned end of a run before the watchdog sends the stop token itself.
 pub const STOP_GRACE: Duration = Duration::from_millis(3000);
 /// Invalid answers accepted before the question is given up as unanswered.
@@ -343,18 +349,26 @@ pub struct Session<W: Write, L: Log> {
     eol: LineEnding,
     stop_requested: Arc<AtomicBool>,
     stop_sent: Arc<AtomicBool>,
+    pause: Pause,
     start: Instant,
 }
 
 impl<W: Write, L: Log> Session<W, L> {
-    /// Wraps an open port.
-    pub fn new(port: W, log: L, eol: LineEnding, stop_requested: Arc<AtomicBool>) -> Self {
+    /// Wraps an open port. `pause` is used inside the stop token ([`write_stop`]).
+    pub fn new(
+        port: W,
+        log: L,
+        eol: LineEnding,
+        stop_requested: Arc<AtomicBool>,
+        pause: Pause,
+    ) -> Self {
         Self {
             port,
             log,
             eol,
             stop_requested,
             stop_sent: Arc::new(AtomicBool::new(false)),
+            pause,
             start: Instant::now(),
         }
     }
@@ -408,7 +422,7 @@ impl<W: Write, L: Log> Session<W, L> {
     /// # Errors
     /// The write error.
     pub fn stop_again(&mut self) -> io::Result<()> {
-        write_stop(&mut self.port, self.eol)?;
+        write_stop(&mut self.port, self.eol, self.pause)?;
         self.stop_sent.store(true, Ordering::SeqCst);
         self.note(&format!("-> {STOP_TOKEN:?}"));
         Ok(())
@@ -437,18 +451,18 @@ impl<W: Write, L: Log> Drop for Session<W, L> {
 }
 
 /// Writes the stop token to `port`. A line ending goes first, so that a partly written token
-/// cannot join with it, then [`STOP_GAP`] passes so that the firmware does not read the stop token
-/// as part of that line ending. Writes nothing else, logs nothing and never blocks on the
+/// cannot join with it, then `pause` waits [`STOP_GAP`] so that the firmware does not read the
+/// stop token as part of that line ending. Writes nothing else, logs nothing and never blocks on the
 /// terminal, so it can be called from a signal handler or a watchdog while the main thread is
 /// stuck on output.
 ///
 /// # Errors
 /// The write error.
-pub fn write_stop<W: Write>(port: &mut W, eol: LineEnding) -> io::Result<()> {
+pub fn write_stop<W: Write>(port: &mut W, eol: LineEnding, pause: Pause) -> io::Result<()> {
     let eol = eol.as_str();
     port.write_all(eol.as_bytes())?;
     port.flush()?;
-    std::thread::sleep(STOP_GAP);
+    pause(STOP_GAP);
     port.write_all(format!("{STOP_TOKEN}{eol}").as_bytes())?;
     port.flush()
 }
@@ -512,11 +526,16 @@ pub struct ForcedStop {
 /// Stops from outside the main thread (signal handler, watchdog): first requests the stop, so
 /// that the main thread sends no further token when it resumes, then writes the stop token to a
 /// second handle on the port. A token the main thread is writing at the same moment can still
-/// get through; the line ending before `d` keeps them apart, and the main thread sends `d` again
-/// when it stops.
-pub fn force_stop<W: Write>(requested: &AtomicBool, port: &mut W, eol: LineEnding) -> ForcedStop {
+/// get through. If it arrives just before this `d`, the firmware may read the `d` as part of it
+/// (see [`STOP_GAP`]), so this `d` may not work; the main thread sends `d` again when it stops.
+pub fn force_stop<W: Write>(
+    requested: &AtomicBool,
+    port: &mut W,
+    eol: LineEnding,
+    pause: Pause,
+) -> ForcedStop {
     let first = !requested.swap(true, Ordering::SeqCst);
-    let written = write_stop(port, eol).is_ok();
+    let written = write_stop(port, eol, pause).is_ok();
     ForcedStop { first, written }
 }
 
@@ -1141,10 +1160,18 @@ mod tests {
         }
     }
 
+    fn no_pause(_: Duration) {}
+
     fn session(port: &FakePort, log: &Lines) -> (Session<FakePort, Lines>, Arc<AtomicBool>) {
         let flag = Arc::new(AtomicBool::new(false));
         (
-            Session::new(port.clone(), log.clone(), LineEnding::Lf, Arc::clone(&flag)),
+            Session::new(
+                port.clone(),
+                log.clone(),
+                LineEnding::Lf,
+                Arc::clone(&flag),
+                no_pause,
+            ),
             flag,
         )
     }
@@ -1775,49 +1802,45 @@ mod tests {
         let port = FakePort::default();
         let mut w = port.clone();
 
-        write_stop(&mut w, LineEnding::Lf).unwrap();
-        write_stop(&mut w, LineEnding::CrLf).unwrap();
+        write_stop(&mut w, LineEnding::Lf, no_pause).unwrap();
+        write_stop(&mut w, LineEnding::CrLf, no_pause).unwrap();
 
         assert_eq!(port.text(), "\nd\n\r\nd\r\n");
     }
 
-    /// A port that records each write and flush, with the time it happened.
-    #[derive(Clone, Default)]
-    struct TimedPort {
-        events: Rc<RefCell<Vec<(String, Instant)>>>,
+    thread_local! {
+        /// Writes, flushes and pauses, in order, for [`EventPort`] and [`record_pause`].
+        static EVENTS: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
     }
 
-    impl Write for TimedPort {
+    /// A port that records each write and flush in [`EVENTS`].
+    struct EventPort;
+
+    impl Write for EventPort {
         fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
             let text = String::from_utf8(buf.to_vec()).unwrap();
-            self.events.borrow_mut().push((text, Instant::now()));
+            EVENTS.with(|e| e.borrow_mut().push(text));
             Ok(buf.len())
         }
 
         fn flush(&mut self) -> io::Result<()> {
-            self.events
-                .borrow_mut()
-                .push(("<flush>".to_owned(), Instant::now()));
+            EVENTS.with(|e| e.borrow_mut().push("<flush>".to_owned()));
             Ok(())
         }
     }
 
-    #[test]
-    fn stop_token_is_written_apart_from_the_leading_line_ending() {
-        let port = TimedPort::default();
-
-        write_stop(&mut port.clone(), LineEnding::Lf).unwrap();
-
-        let events = port.events.borrow();
-        let texts: Vec<&str> = events.iter().map(|(t, _)| t.as_str()).collect();
-        assert_eq!(texts, ["\n", "<flush>", "d\n", "<flush>"]);
-        assert!(events[2].1.duration_since(events[1].1) >= STOP_GAP);
+    fn record_pause(d: Duration) {
+        EVENTS.with(|e| e.borrow_mut().push(format!("<pause {}>", d.as_millis())));
     }
 
     #[test]
-    fn stop_gap_is_longer_than_the_firmware_serial_timeout() {
-        // OpenCat (24563ca) src/OpenCat.h: SERIAL_TIMEOUT 5 ms joins bytes arriving within it.
-        assert!(STOP_GAP >= Duration::from_millis(5) * 4);
+    fn stop_token_is_written_after_a_pause_following_the_line_ending() {
+        EVENTS.with(|e| e.borrow_mut().clear());
+
+        write_stop(&mut EventPort, LineEnding::Lf, record_pause).unwrap();
+
+        let events = EVENTS.with(|e| e.borrow().clone());
+        assert_eq!(events, ["\n", "<flush>", "<pause 50>", "d\n", "<flush>"]);
     }
 
     #[test]
@@ -1827,7 +1850,7 @@ mod tests {
         let other = FakePort::default();
 
         s.stop().unwrap();
-        write_stop(&mut other.clone(), LineEnding::Lf).unwrap();
+        write_stop(&mut other.clone(), LineEnding::Lf, no_pause).unwrap();
 
         assert_eq!(port.text(), other.text());
     }
@@ -1926,8 +1949,8 @@ mod tests {
             inner: inner.clone(),
         };
 
-        let first = force_stop(&requested, &mut port, LineEnding::Lf);
-        let second = force_stop(&requested, &mut port, LineEnding::Lf);
+        let first = force_stop(&requested, &mut port, LineEnding::Lf, no_pause);
+        let second = force_stop(&requested, &mut port, LineEnding::Lf, no_pause);
 
         assert_eq!(
             first,
@@ -1953,7 +1976,7 @@ mod tests {
         let port = FakePort::default();
         port.fail_next(1);
 
-        let result = force_stop(&requested, &mut port.clone(), LineEnding::Lf);
+        let result = force_stop(&requested, &mut port.clone(), LineEnding::Lf, no_pause);
 
         assert_eq!(
             result,
@@ -1980,7 +2003,7 @@ mod tests {
                 calls += 1;
                 if calls == 2 {
                     // The watchdog (or the signal handler) fires while waiting after `ksit`.
-                    let _ = force_stop(&flag, &mut side.clone(), LineEnding::Lf);
+                    let _ = force_stop(&flag, &mut side.clone(), LineEnding::Lf, no_pause);
                 }
                 !flag.load(Ordering::SeqCst)
             },
