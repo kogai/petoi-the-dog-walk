@@ -96,7 +96,7 @@ pub trait Reflex {
     fn step(&mut self, obs: &Observation) -> ReflexOutput;
 }
 pub trait Transport {
-    fn send(&mut self, token: Token) -> Result<(), TransportError>;
+    fn send(&mut self, token: Token) -> Result<(), TransportError>; // 応答の待ち方は D-15
     fn stop(&mut self) -> Result<(), TransportError>; // 停止トークン d を送る
 }
 ```
@@ -116,7 +116,7 @@ pub trait Transport {
 |---|---|
 | Jev の呼び出し失敗・タイムアウト | その回の判断は無し扱い。以後の扱いは調停の規則に従う（[05](05-arbitration.md)） |
 | API キーが無い | 起動時に理性層を無効にして、反射層だけ（または既定動作だけ）で動く |
-| 送信失敗 | 再試行は1回まで。続けて失敗したら停止してループを抜ける |
+| 送信失敗（書き込みの失敗） | 再試行は1回まで。続けて失敗したら停止してループを抜ける。応答の時間切れ・知らないトークンの応答では、同じトークンを送り直さない（[06](06-transport.md) 2.1節） |
 | 送信失敗で止めるとき | 停止トークン自体が届かない可能性がある。届かなかったことを端末にはっきり表示し、電源を切るよう促す |
 | 終了・Ctrl-C・panic | 停止トークン（`d`、F-T1）を送ってから閉じる。通常終了と panic の巻き戻しは `Drop` で、Ctrl-C・SIGTERM はシグナル処理（`ctrlc` か `signal-hook` クレート）で立てたフラグをループが見て行う。`panic = "abort"` や SIGKILL では送れないので、ビルド設定で巻き戻しを使い、非常時は電源を切る |
 
