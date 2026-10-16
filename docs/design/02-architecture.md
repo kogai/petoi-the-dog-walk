@@ -30,11 +30,11 @@ Cargo のワークスペースにし、責務ごとにクレートを分ける�
 | クレート | 役割 | 外部 I/O | 依存してよいもの |
 |---|---|---|---|
 | `walk-core` | 型（`Action`、`Command`、`Token`、`Observation` など）、動作→トークン表、観測から Jev の `situation` を作る変換、調停（[05](05-arbitration.md)）、スキルの展開、ハエ脳出力の変換、境界の trait、本番でも使う「何もしない」実装（反射層なし・理性層なし） | なし | なし（`#![no_std]` + `alloc`） |
-| `walk-jev` | Jev への質問の組み立て、HTTP 呼び出し、応答の検査（[03](03-reasoning-layer.md)） | Jev API | `walk-core`、HTTP クライアント、serde |
-| `walk-bittle` | Bittle への送信（[06](06-transport.md)）、センサーの読み取り | シリアル / HTTP | `walk-core`、serialport、HTTP クライアント |
-| `walk-flybrain` | ハエ脳（[04](04-reflex-layer.md)、フェーズ3） | 未定 D-06 | `walk-core` |
+| `walk-jev` | Jev のドライバー（2.3節）: Jev への質問の組み立て、HTTP 呼び出し、応答の検査（[03](03-reasoning-layer.md)） | Jev API | `walk-core`、HTTP クライアント、serde |
+| `walk-bittle` | Bittle のドライバー（2.3節）: 送信（[06](06-transport.md)）、センサーの読み取りと、それが使うリンク（シリアル）。Wi-Fi（HTTP）の扱いは ADR-0001 2.3節 | シリアル / HTTP | `walk-core`、serialport、HTTP クライアント |
+| `walk-flybrain` | ハエ脳のドライバー（2.3節。[04](04-reflex-layer.md)、フェーズ3） | 未定 D-06 | `walk-core` |
 | `walk-app` | 起動、設定と文章の読み込み、ループ、非常停止（実行ファイル） | ファイル・時計・端末 | 上のすべて |
-| `walk-testing` | Fake と、テスト用の偽の時計（`dev-dependencies` 専用） | なし | `walk-core` |
+| `walk-testing` | Fake（境界の trait と `Link` の偽物）と、テスト用の偽の時計（`dev-dependencies` 専用） | なし | `walk-core` |
 | `walk-experiments` | 人が実験で使う道具（`experimentals/`）。本体ではない | 実験ごと（シリアル・HTTP） | ワークスペースのクレートには依存しない |
 
 - `walk-testing` は `walk-core` に依存するので、`walk-core` 自身のテストでは使わない（循環になる）。`walk-core` のテストは純粋関数を直接呼ぶので Fake が要らない。Fake を使うテストは、殻のクレートの `tests/` に置く。
@@ -49,6 +49,20 @@ Cargo のワークスペースにし、責務ごとにクレートを分ける�
 
 - 外部 I/O はここだけで行う。外から来たデータは serde で専用の型に変換し、検査を通ったものだけを `walk-core` の型にして渡す。
 - 殻は薄く保つ。条件分岐が増えてきたら、判断の部分を `walk-core` の純粋関数に移す。
+
+### 2.3 ドライバー層（[ADR-0001](adr/0001-driver-layer.md)、D-16）
+
+1節の図は変えない。図の各箱（`sensing`・`reasoner`・`reflex`・`transport`）の中を、次の3段に分ける。
+
+| 段 | 置き場所 | 中身 |
+|---|---|---|
+| 境界の trait | `walk-core` | 上の層が使う「デバイスの役目」（`Transport`・`Reasoner`・`Reflex`、センサーの trait）と、`Link`（バイトの通り道）・`Clock`（時計） |
+| ドライバー | デバイスや API ごとの殻のクレート（`walk-bittle`・`walk-jev`・`walk-flybrain`） | やり取りの手順だけ（起動を待つ、応答を待つ、受け取った塊をつなぐ、など）。`Link` と `Clock` を引数で受け取る。判断のロジックは持たない |
+| リンク | それを使うドライバーのクレート | `Link` の実装（`serialport` を包むものなど、バイトの流れで話す通り道）。中身の意味は知らない。HTTP のような要求と応答の組の通り道は、別の trait にする案（ADR-0001 2.3節） |
+
+- `walk-app` が設定に従ってドライバーとリンクを選び、境界の trait としてループに渡す。デバイスを替えるときは、ドライバーを足して、`walk-app` の組み立てに1か所足す。
+- テストでは、境界の trait を Fake に、`Link` を偽物（決めたバイト列を決めた時刻に返す）に、`Clock` を偽の時計に差し替える。ドライバーの手順は、E00 などで記録した出力を偽の `Link` に流して確かめる。
+- 1つのデバイスが複数の役目を持つとき（例: Bittle の送信と IMU の読み取り）は、1つのドライバーが1つの `Link` を持ち、複数の trait を実装する。
 
 ## 3. 型と境界（スケッチ）
 
@@ -99,6 +113,16 @@ pub trait Transport {
     fn send(&mut self, token: Token) -> Result<(), TransportError>; // 応答の待ち方は D-15
     fn stop(&mut self) -> Result<(), TransportError>; // 停止トークン d を送る
 }
+
+// ドライバー層の下側（ADR-0001）。no_std のまま書ける形にする（std::io を使わない）
+pub trait Link {
+    fn write(&mut self, bytes: &[u8]) -> Result<(), LinkError>;
+    // 上限の時間までに届いた分を buf に入れて、その長さを返す。何も届かなければ 0
+    fn read(&mut self, buf: &mut [u8], timeout: Millis) -> Result<usize, LinkError>;
+}
+pub trait Clock {
+    fn now(&self) -> Millis;
+}
 ```
 
 ## 4. 時間とスレッド
@@ -108,7 +132,7 @@ pub trait Transport {
   100ms 周期を超えうるので、理性層は別スレッドで回し、結果をチャネルで送る。ループは最新の結果だけを使う。
 - 非同期ランタイム（tokio など）は使わない。標準のスレッドとチャネルで足りる。
 - 各判断には時刻（`Millis`）を付け、古い判断は調停で捨てる（有効期限は D-03）。
-- 時計は `walk-app` だけが読み、値として `walk-core` に渡す。テストでは偽の時計を使い、実時間を待たない。
+- 本物の時計は `walk-app` だけが読み、値として `walk-core` に渡す。ドライバーが時間切れを測るときは、`walk-app` から `Clock` を受け取る（2.3節）。テストでは偽の時計を使い、実時間を待たない。
 
 ## 5. 失敗時の振る舞い
 

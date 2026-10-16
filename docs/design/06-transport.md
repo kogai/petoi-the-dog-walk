@@ -23,6 +23,8 @@
 | `SerialTransport` | USB / Bluetooth。シリアルポートにトークンを書き込む | `serialport` クレート（`walk-bittle`） |
 | `HttpTransport` | Wi-Fi。`/action?name=` に GET する | HTTP クライアント（`walk-bittle`） |
 
+3つとも、ドライバー層（[02](02-architecture.md) 2.3節、[ADR-0001](adr/0001-driver-layer.md)）では Bittle のドライバーにあたる。`SerialTransport` は、シリアルポートを直接持たず、`Link`（`serialport` を包む `SerialLink`）と `Clock` を受け取る。そのため、2.1節の手順は偽の `Link` でテストできる（2.2節）。`HttpTransport` が使う HTTP の境界の形は、ADR-0001 2.3節のとおり E15 の後で決める。
+
 共通の決まり:
 
 - 送れるのは `Token` 型の値だけ。`Token` は許可リスト（F-T1 の表のうち `walk-core` で使うもの）からしか作れない（[02](02-architecture.md) 3節）。
