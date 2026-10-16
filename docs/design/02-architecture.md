@@ -22,6 +22,8 @@
                       Bittle (NyBoard, ATmega328P)
 ```
 
+図の `Token 列` は、[ADR-0001](adr/0001-driver-layer.md)（D-16）以後は `Action` の並び。トークンへの変換は `transport` の箱の中のドライバーが行う（図そのものは変えない）。
+
 ## 2. クレートの分け方
 
 Cargo のワークスペースにし、責務ごとにクレートを分ける。
@@ -63,7 +65,7 @@ Cargo のワークスペースにし、責務ごとにクレートを分ける�
 ```rust
 // walk-core: 値は不変。列挙は enum で表し、match の網羅性をコンパイラが検査する。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Action { Balance, Walk, Back, Sit, Hello, Stop /* facts.md F-T1 から、使うものだけ */ }
+pub enum Action { Balance, Walk, Back, Sit, Hello, Stop /* 今は Bittle（F-T1）で出せるものから選ぶ。別のロボットで対応しないものは ADR-0001 S11・D-17 (5) */ }
 
 /// Jev が選ぶもの。単一の動作か、定義済みのスキル（`Action` の並び。D-05 の見直し、ADR-0001）。
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -145,7 +147,7 @@ pub struct Token(&'static str);
 | API キーが無い | 起動時に理性層を無効にして、反射層だけ（または既定動作だけ）で動く |
 | 送信失敗（書き込みの失敗） | 再試行は1回まで。続けて失敗したら停止してループを抜ける。応答の時間切れ・知らないトークンの応答では、同じトークンを送り直さない（[06](06-transport.md) 2.1節） |
 | 送信失敗で止めるとき | 停止トークン自体が届かない可能性がある。届かなかったことを端末にはっきり表示し、電源を切るよう促す |
-| 終了・Ctrl-C・panic | 停止トークン（`d`、F-T1）を送ってから閉じる。通常終了と panic の巻き戻しは `Drop` で、Ctrl-C・SIGTERM はシグナル処理（`ctrlc` か `signal-hook` クレート）で立てたフラグをループが見て行う。`panic = "abort"` や SIGKILL では送れないので、ビルド設定で巻き戻しを使い、非常時は電源を切る |
+| 終了・Ctrl-C・panic | 停止（Bittle では `d`、F-T1）を送ってから閉じる。通常終了と Ctrl-C・SIGTERM では、`walk-app` が明示して `stop()` を呼ぶ（Ctrl-C・SIGTERM はシグナル処理（`ctrlc` か `signal-hook` クレート）で立てたフラグをループが見て行う）。`Drop` は panic の巻き戻しと最後の備え（ADR-0001 S1）。`panic = "abort"` や SIGKILL では送れないので、ビルド設定で巻き戻しを使い、非常時は電源を切る |
 
 ## 6. 設定と文章
 

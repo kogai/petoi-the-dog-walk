@@ -19,7 +19,7 @@
 
 | 実装 | 用途 | 依存 |
 |---|---|---|
-| `FakeTransport` | テスト。送ったトークンを記録する。`send` が `Ok` か `Err`（知らないトークン、時間切れ）を返すよう設定できる | なし（`walk-testing`） |
+| `FakeTransport` | テスト。境界の trait の偽物。送った `Action` を記録する。`send` が `Ok` か `Err`（`TransportError` の各場合）を返すよう設定できる | なし（`walk-testing`） |
 | `SerialTransport` | USB / Bluetooth。シリアルポートにトークンを書き込む | `serialport` クレート（`walk-bittle`） |
 | `HttpTransport` | Wi-Fi。`/action?name=` に GET する | HTTP クライアント（`walk-bittle`） |
 
