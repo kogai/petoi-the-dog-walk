@@ -17,7 +17,10 @@
 //!
 //! With `E00_ASK`, after the final wait the program rings the bell and shows one yes/no question
 //! about what the robot is doing at that moment, sends `d`, and then reads the answer from the
-//! keyboard into the log (`walk_experiments::serial_probe::observe`).
+//! keyboard into the log (`walk_experiments::serial_probe::observe`). With `E00_ASK_AFTER_STOP_MS`
+//! as well, it sends `d` first, asks that long after it, and sends `d` again after the look (E13).
+//! The watchdog guards only the first `d`; the second one is sent by the main thread, retried
+//! once, and reported loudly if it still cannot be written.
 
 use std::cell::Cell;
 use std::fs::File;
@@ -365,7 +368,11 @@ fn probe(probe: &Probe) -> ExitCode {
         session.stop_sent_flag(),
         Arc::clone(&fired),
         probe.eol,
-        serial_probe::stop_deadline(probe.timing, probe.tokens.len(), probe.ask.is_some()),
+        serial_probe::stop_deadline(
+            probe.timing,
+            probe.tokens.len(),
+            probe.ask.is_some() && probe.ask_at.looks_before_stop(),
+        ),
     );
     let outcome = serial_probe::run(&mut session, &probe.tokens, probe.timing, &mut |d| {
         sleep_unless_stopped(d, &stop)
@@ -376,6 +383,7 @@ fn probe(probe: &Probe) -> ExitCode {
             Some(serial_probe::observe(
                 &mut session,
                 question,
+                probe.ask_at,
                 &mut |d| sleep_unless_stopped(d, &stop),
                 &mut |prompt| {
                     if matches!(prompt, Prompt::LookNow(_)) {
@@ -447,6 +455,14 @@ fn report_exit(
                 warn(&format!(
                     "the first stop attempt failed ({}); the retry sent the stop token",
                     e.kind()
+                ));
+            }
+        }
+        Exit::SecondStopFailed => {
+            if let Some(Ok(Observed::SecondStopFailed(kind))) = observed {
+                warn(&format!(
+                    "!! SECOND STOP TOKEN NOT SENT ({kind}); the first one was sent. \
+                     If the robot is still moving, switch off the power."
                 ));
             }
         }
