@@ -381,8 +381,7 @@ impl<W: Write, L: Log> Session<W, L> {
         Ok(())
     }
 
-    /// Sends the stop token once. A line ending goes first, so that a partly written token
-    /// cannot join with it. The port is written before anything is logged.
+    /// Sends the stop token once ([`write_stop`]). The port is written before anything is logged.
     ///
     /// # Errors
     /// The write error. The stop is then not marked as sent, so `Drop` tries again.
@@ -429,15 +428,22 @@ impl<W: Write, L: Log> Drop for Session<W, L> {
     }
 }
 
-/// Writes the stop token to `port`. A line ending goes first, so that a partly written token
-/// cannot join with it. Writes nothing else, logs nothing and never blocks on the terminal, so it
-/// can be called from a signal handler or a watchdog while the main thread is stuck on output.
+/// Writes the stop token and a line ending to `port`, with nothing before the token. Writes
+/// nothing else, logs nothing and never blocks on the terminal, so it can be called from a signal
+/// handler or a watchdog while the main thread is stuck on output.
+///
+/// No line ending goes before the token (inference from the `OpenCat` source, commit 24563ca,
+/// `src/io.h` `read_serial`; **unverified** on the board): the firmware takes the first byte
+/// waiting as the token and everything else waiting, up to the last line ending, as its argument.
+/// So `"\nd\n"` is read as the token `\n` with the argument `d`, not as a stop. This matches the
+/// `\n\r\n` reply to the stop seen in E00. For the same reason, a stop that arrives while another
+/// token is still waiting to be read joins that token; the main thread sends `d` again when it
+/// stops.
 ///
 /// # Errors
 /// The write error.
 pub fn write_stop<W: Write>(port: &mut W, eol: LineEnding) -> io::Result<()> {
-    let eol = eol.as_str();
-    port.write_all(format!("{eol}{STOP_TOKEN}{eol}").as_bytes())
+    port.write_all(format!("{STOP_TOKEN}{}", eol.as_str()).as_bytes())
 }
 
 /// Time from the start of a run after which the stop token should already have been sent:
@@ -499,8 +505,8 @@ pub struct ForcedStop {
 /// Stops from outside the main thread (signal handler, watchdog): first requests the stop, so
 /// that the main thread sends no further token when it resumes, then writes the stop token to a
 /// second handle on the port. A token the main thread is writing at the same moment can still
-/// get through; the line ending before `d` keeps them apart, and the main thread sends `d` again
-/// when it stops.
+/// get through, and the firmware may then read this `d` as part of it ([`write_stop`]); the main
+/// thread sends `d` again when it stops.
 pub fn force_stop<W: Write>(requested: &AtomicBool, port: &mut W, eol: LineEnding) -> ForcedStop {
     let first = !requested.swap(true, Ordering::SeqCst);
     let written = write_stop(port, eol).is_ok();
@@ -1154,7 +1160,7 @@ mod tests {
         drop(s);
 
         assert_eq!(outcome.unwrap(), Outcome::Completed);
-        assert_eq!(port.text(), "ksit\nkhi\n\nd\n");
+        assert_eq!(port.text(), "ksit\nkhi\nd\n");
     }
 
     #[test]
@@ -1179,7 +1185,7 @@ mod tests {
         drop(s);
 
         assert_eq!(outcome.unwrap(), Outcome::Interrupted);
-        assert_eq!(port.text(), "ksit\n\nd\n");
+        assert_eq!(port.text(), "ksit\nd\n");
     }
 
     #[test]
@@ -1192,7 +1198,7 @@ mod tests {
 
         assert!(matches!(result, Err(SendError::Stopping)));
         drop(s);
-        assert_eq!(port.text(), "\nd\n");
+        assert_eq!(port.text(), "d\n");
     }
 
     #[test]
@@ -1205,7 +1211,7 @@ mod tests {
         drop(s);
 
         assert!(outcome.is_err());
-        assert_eq!(port.text(), "\nd\n");
+        assert_eq!(port.text(), "d\n");
     }
 
     #[test]
@@ -1218,7 +1224,7 @@ mod tests {
         drop(s);
 
         assert!(first.is_err());
-        assert_eq!(port.text(), "\nd\n");
+        assert_eq!(port.text(), "d\n");
     }
 
     #[test]
@@ -1241,7 +1247,7 @@ mod tests {
         s.stop().unwrap();
         drop(s);
 
-        assert_eq!(port.text(), "\nd\n");
+        assert_eq!(port.text(), "d\n");
     }
 
     #[test]
@@ -1269,7 +1275,7 @@ mod tests {
         drop(s);
 
         assert_eq!(outcome.unwrap(), Outcome::Interrupted);
-        assert_eq!(port.text(), "\nd\n");
+        assert_eq!(port.text(), "d\n");
     }
     // ---- observation question ----
 
@@ -1387,8 +1393,8 @@ mod tests {
             Some("sleep 1500 (port: \"\")")
         );
         // The stop token was already on the port when the answer was read.
-        assert!(events.iter().any(|e| e == "read (port: \"\\nd\\n\")"));
-        assert_eq!(port.text(), "\nd\n");
+        assert!(events.iter().any(|e| e == "read (port: \"d\\n\")"));
+        assert_eq!(port.text(), "d\n");
         let lines = log.0.borrow();
         assert!(lines.iter().any(|l| l.ends_with("?? moving?")));
         assert!(lines.iter().any(|l| l.ends_with("answer: yes")));
@@ -1407,7 +1413,7 @@ mod tests {
         let (result, port, log, _) = observe_with(&[], true, AskAt::BeforeStop);
 
         assert_eq!(result.unwrap(), Observed::NoAnswer);
-        assert_eq!(port.text(), "\nd\n");
+        assert_eq!(port.text(), "d\n");
         assert!(log.0.borrow().iter().any(|l| l.ends_with("answer: none")));
     }
 
@@ -1437,7 +1443,7 @@ mod tests {
         let (result, port, log, _) = observe_with(&[STOPPED], true, AskAt::BeforeStop);
 
         assert_eq!(result.unwrap(), Observed::Interrupted);
-        assert_eq!(port.text(), "\nd\n");
+        assert_eq!(port.text(), "d\n");
         let lines = log.0.borrow();
         assert!(lines.iter().any(|l| l.ends_with("answer: interrupted")));
         assert!(!lines.iter().any(|l| l.ends_with("answer: none")));
@@ -1501,7 +1507,7 @@ mod tests {
         let (result, port, _, events) = observe_with(&["y"], false, AskAt::BeforeStop);
 
         assert_eq!(result.unwrap(), Observed::Interrupted);
-        assert_eq!(port.text(), "\nd\n");
+        assert_eq!(port.text(), "d\n");
         assert!(!events.iter().any(|e| e.starts_with("read ")));
     }
 
@@ -1527,7 +1533,7 @@ mod tests {
 
         assert!(result.is_err());
         assert!(!read);
-        assert_eq!(port.text(), "\nd\n");
+        assert_eq!(port.text(), "d\n");
     }
     // ---- asking after the stop (E13) ----
 
@@ -1585,20 +1591,16 @@ mod tests {
         // The stop token is on the port before the wait and before the question.
         assert_eq!(
             events.first().map(String::as_str),
-            Some("sleep 2000 (port: \"\\nd\\n\")")
+            Some("sleep 2000 (port: \"d\\n\")")
         );
         assert!(events.get(1).is_some_and(|e| e.starts_with("show LookNow")));
         assert_eq!(
             events.get(2).map(String::as_str),
-            Some("sleep 1500 (port: \"\\nd\\n\")")
+            Some("sleep 1500 (port: \"d\\n\")")
         );
         // A second stop goes out after looking, before the answer is read.
-        assert!(
-            events
-                .iter()
-                .any(|e| e == "read (port: \"\\nd\\n\\nd\\n\")")
-        );
-        assert_eq!(port.text(), "\nd\n\nd\n");
+        assert!(events.iter().any(|e| e == "read (port: \"d\\nd\\n\")"));
+        assert_eq!(port.text(), "d\nd\n");
         let lines = log.0.borrow();
         assert!(lines.iter().any(|l| l.ends_with("?? moving?")));
         assert!(lines.iter().any(|l| l.ends_with("answer: no")));
@@ -1610,7 +1612,7 @@ mod tests {
             observe_with(&["y"], false, AskAt::AfterStop(Duration::from_millis(2000)));
 
         assert_eq!(result.unwrap(), Observed::Interrupted);
-        assert_eq!(port.text(), "\nd\n");
+        assert_eq!(port.text(), "d\n");
         assert!(!events.iter().any(|e| e.starts_with("show ")));
         assert!(!events.iter().any(|e| e.starts_with("read ")));
     }
@@ -1634,7 +1636,7 @@ mod tests {
 
         assert!(result.is_err());
         assert!(!shown);
-        assert_eq!(port.text(), "\nd\n");
+        assert_eq!(port.text(), "d\n");
     }
 
     /// Runs `observe` after the stop with `sleep` answering from `sleeps` in order (then `true`).
@@ -1667,7 +1669,7 @@ mod tests {
         let (result, port, read) = observe_after_stop(&[true, false]);
 
         assert_eq!(result.unwrap(), Observed::Interrupted);
-        assert_eq!(port.text(), "\nd\n\nd\n");
+        assert_eq!(port.text(), "d\nd\n");
         assert!(!read);
     }
 
@@ -1693,7 +1695,7 @@ mod tests {
         drop(s);
 
         assert_eq!(result.unwrap(), Observed::Answered(Answer::No));
-        assert_eq!(port.text(), "\nd\n\nd\n");
+        assert_eq!(port.text(), "d\nd\n");
     }
 
     #[test]
@@ -1726,7 +1728,7 @@ mod tests {
             Observed::SecondStopFailed(io::ErrorKind::TimedOut)
         );
         assert!(!read);
-        assert_eq!(port.text(), "\nd\n");
+        assert_eq!(port.text(), "d\n");
     }
 
     #[test]
@@ -1758,14 +1760,16 @@ mod tests {
     // ---- stop independent of the main thread ----
 
     #[test]
-    fn stop_bytes_start_with_a_line_ending() {
+    fn stop_bytes_are_the_stop_token_and_a_line_ending_only() {
+        // No line ending before `d`: the firmware would read `\n` as the token and `d` as its
+        // argument (see `write_stop`).
         let port = FakePort::default();
         let mut w = port.clone();
 
         write_stop(&mut w, LineEnding::Lf).unwrap();
         write_stop(&mut w, LineEnding::CrLf).unwrap();
 
-        assert_eq!(port.text(), "\nd\n\r\nd\r\n");
+        assert_eq!(port.text(), "d\nd\r\n");
     }
 
     #[test]
@@ -1892,7 +1896,7 @@ mod tests {
             }
         );
         assert!(seen.borrow().iter().all(|requested_then| *requested_then));
-        assert_eq!(inner.text(), "\nd\n\nd\n");
+        assert_eq!(inner.text(), "d\nd\n");
     }
 
     #[test]
@@ -1936,8 +1940,8 @@ mod tests {
         drop(s);
 
         assert_eq!(outcome.unwrap(), Outcome::Interrupted);
-        assert_eq!(port.text(), "ksit\n\nd\n");
-        assert_eq!(side.text(), "\nd\n");
+        assert_eq!(port.text(), "ksit\nd\n");
+        assert_eq!(side.text(), "d\n");
     }
 
     #[test]
