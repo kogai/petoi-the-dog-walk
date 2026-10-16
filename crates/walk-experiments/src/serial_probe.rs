@@ -86,6 +86,18 @@ pub enum AskAt {
     AfterStop(Duration),
 }
 
+impl AskAt {
+    /// Whether the person looks while the stop token is still to come, so that the stop is
+    /// planned only after [`LOOK_TIME`] (see [`stop_deadline`]).
+    #[must_use]
+    pub fn looks_before_stop(self) -> bool {
+        match self {
+            Self::BeforeStop => true,
+            Self::AfterStop(_) => false,
+        }
+    }
+}
+
 /// What the binary should do.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Command {
@@ -316,7 +328,8 @@ pub enum SendError {
 }
 
 /// An open connection. Sends tokens, refuses them once a stop is requested, and sends the stop
-/// token exactly once (again from `Drop` if the first attempt failed).
+/// token: [`Session::stop`] once (again from `Drop` if the first attempt failed), and
+/// [`Session::stop_again`] each time it is called.
 pub struct Session<W: Write, L: Log> {
     port: W,
     log: L,
@@ -377,15 +390,13 @@ impl<W: Write, L: Log> Session<W, L> {
         if self.stop_sent.load(Ordering::SeqCst) {
             return Ok(());
         }
-        write_stop(&mut self.port, self.eol)?;
-        self.stop_sent.store(true, Ordering::SeqCst);
-        self.note(&format!("-> {STOP_TOKEN:?}"));
-        Ok(())
+        self.stop_again()
     }
 
     /// Sends the stop token again, even if it was already sent. Used after looking at a robot
     /// that should already have stopped, so that it is not left moving if the first one did not
-    /// work. The port is written before anything is logged.
+    /// work. The port is written before anything is logged. Only the main thread sends this one;
+    /// the watchdog stops watching once the first stop token is out.
     ///
     /// # Errors
     /// The write error.
@@ -698,6 +709,9 @@ pub enum Observed {
     /// A stop was requested while looking or while waiting for the answer; the stop token was
     /// sent and no answer was recorded.
     Interrupted,
+    /// [`AskAt::AfterStop`]: the first stop token went out, but the second one could not be
+    /// written, even on a retry. No answer was read.
+    SecondStopFailed(io::ErrorKind),
 }
 
 /// Asks one question about what the robot is doing *now*, so that the person watching has to
@@ -735,7 +749,12 @@ pub fn observe<W: Write, L: Log>(
             session.note(&format!("?? {question}"));
             show(Prompt::LookNow(question));
             let looked = sleep(LOOK_TIME);
-            session.stop_again()?;
+            // The first stop already counts as sent, so neither the caller nor `Drop` would
+            // write this one again: retry here, and report a failure as its own outcome.
+            if let Err(e) = session.stop_again().or_else(|_| session.stop_again()) {
+                session.note(&format!("second stop token not sent ({})", e.kind()));
+                return Ok(Observed::SecondStopFailed(e.kind()));
+            }
             looked
         }
     };
@@ -776,6 +795,8 @@ pub enum Exit {
     StopRetried,
     /// The stop token could not be sent at all.
     StopFailed,
+    /// [`AskAt::AfterStop`]: the first stop token went out, the second could not be sent.
+    SecondStopFailed,
 }
 
 impl Exit {
@@ -785,7 +806,7 @@ impl Exit {
         match self {
             Self::Success => 0,
             Self::SendFailed => 1,
-            Self::StopRetried | Self::StopFailed => 3,
+            Self::StopRetried | Self::StopFailed | Self::SecondStopFailed => 3,
             Self::Interrupted => 130,
         }
     }
@@ -801,15 +822,21 @@ pub fn exit_status(
     if !stop_ok {
         return Exit::StopFailed;
     }
-    if matches!(observed, Some(Err(_))) {
-        return Exit::StopRetried;
+    match observed {
+        Some(Err(_)) => return Exit::StopRetried,
+        Some(Ok(Observed::SecondStopFailed(_))) => return Exit::SecondStopFailed,
+        Some(Ok(Observed::Answered(_) | Observed::NoAnswer | Observed::Interrupted)) | None => {}
     }
     match outcome {
         Err(_) => Exit::SendFailed,
         Ok(Outcome::Interrupted) => Exit::Interrupted,
         Ok(Outcome::Completed) => match observed {
             Some(Ok(Observed::Interrupted)) => Exit::Interrupted,
-            Some(Ok(Observed::Answered(_) | Observed::NoAnswer) | Err(_)) | None => Exit::Success,
+            Some(
+                Ok(Observed::Answered(_) | Observed::NoAnswer | Observed::SecondStopFailed(_))
+                | Err(_),
+            )
+            | None => Exit::Success,
         },
     }
 }
@@ -1608,6 +1635,124 @@ mod tests {
         assert!(result.is_err());
         assert!(!shown);
         assert_eq!(port.text(), "\nd\n");
+    }
+
+    /// Runs `observe` after the stop with `sleep` answering from `sleeps` in order (then `true`).
+    fn observe_after_stop(sleeps: &[bool]) -> (io::Result<Observed>, FakePort, bool) {
+        let (port, log) = (FakePort::default(), Lines::default());
+        let (mut s, _) = session(&port, &log);
+        let mut calls = 0;
+        let mut read = false;
+        let result = observe(
+            &mut s,
+            "moving?",
+            AskAt::AfterStop(Duration::from_millis(2000)),
+            &mut |_| {
+                let ok = sleeps.get(calls).copied().unwrap_or(true);
+                calls += 1;
+                ok
+            },
+            &mut |_| {},
+            &mut || {
+                read = true;
+                Input::Line("y".to_owned())
+            },
+        );
+        drop(s);
+        (result, port, read)
+    }
+
+    #[test]
+    fn interrupt_while_looking_after_stop_sends_the_second_stop_and_reads_nothing() {
+        let (result, port, read) = observe_after_stop(&[true, false]);
+
+        assert_eq!(result.unwrap(), Observed::Interrupted);
+        assert_eq!(port.text(), "\nd\n\nd\n");
+        assert!(!read);
+    }
+
+    #[test]
+    fn second_stop_that_fails_once_is_sent_by_the_retry() {
+        let (port, log) = (FakePort::default(), Lines::default());
+        let (mut s, _) = session(&port, &log);
+        let mut calls = 0;
+        let result = observe(
+            &mut s,
+            "moving?",
+            AskAt::AfterStop(Duration::from_millis(2000)),
+            &mut |_| {
+                calls += 1;
+                if calls == 2 {
+                    port.fail_next(1); // the second stop's first attempt
+                }
+                true
+            },
+            &mut |_| {},
+            &mut || Input::Line("n".to_owned()),
+        );
+        drop(s);
+
+        assert_eq!(result.unwrap(), Observed::Answered(Answer::No));
+        assert_eq!(port.text(), "\nd\n\nd\n");
+    }
+
+    #[test]
+    fn second_stop_that_cannot_be_sent_is_reported_and_no_answer_is_read() {
+        let (port, log) = (FakePort::default(), Lines::default());
+        let (mut s, _) = session(&port, &log);
+        let mut calls = 0;
+        let mut read = false;
+        let result = observe(
+            &mut s,
+            "moving?",
+            AskAt::AfterStop(Duration::from_millis(2000)),
+            &mut |_| {
+                calls += 1;
+                if calls == 2 {
+                    port.fail_next(2); // the second stop and its retry
+                }
+                true
+            },
+            &mut |_| {},
+            &mut || {
+                read = true;
+                Input::End
+            },
+        );
+        drop(s); // the first stop went out, so Drop writes nothing more
+
+        assert_eq!(
+            result.unwrap(),
+            Observed::SecondStopFailed(io::ErrorKind::TimedOut)
+        );
+        assert!(!read);
+        assert_eq!(port.text(), "\nd\n");
+    }
+
+    #[test]
+    fn failed_second_stop_has_its_own_exit() {
+        let observed: io::Result<Observed> =
+            Ok(Observed::SecondStopFailed(io::ErrorKind::TimedOut));
+
+        let exit = exit_status(&Ok(Outcome::Completed), Some(&observed), true);
+
+        assert_eq!(exit, Exit::SecondStopFailed);
+        assert_eq!(exit.code(), 3);
+    }
+
+    #[test]
+    fn deadline_has_no_look_time_when_asking_after_the_stop() {
+        let t = timing();
+
+        assert_eq!(
+            stop_deadline(
+                t,
+                1,
+                AskAt::AfterStop(Duration::from_millis(5000)).looks_before_stop()
+            ),
+            stop_deadline(t, 1, false)
+        );
+        assert!(AskAt::BeforeStop.looks_before_stop());
     }
 
     // ---- stop independent of the main thread ----
