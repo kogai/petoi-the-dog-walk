@@ -31,8 +31,8 @@ use std::time::{Duration, Instant};
 
 use walk_experiments::serial_probe::{
     self, BAUD_RATE, Command, Exit, ForcedStop, Input, LineEnding, Log, Observed, Outcome, Probe,
-    Prompt, RetryOutcome, STOP_FAILED, Session, SignalAction, WatchdogStep, hide_port, show_bytes,
-    write_stop,
+    Prompt, STOP_FAILED, Session, SignalAction, WatchdogReport, WatchdogStep, hide_port,
+    show_bytes, write_stop,
 };
 
 /// Read and write timeout on the port, so that a vanished device cannot hang a write.
@@ -101,11 +101,6 @@ fn emergency_stop(port: &StopPort, requested: &AtomicBool, eol: LineEnding) -> F
 /// Attempts the watchdog makes to write the stop token (one [`TICK`] apart).
 const WATCHDOG_ATTEMPTS: u32 = 20;
 
-/// What the watchdog did, for the main thread's report.
-const WATCHDOG_IDLE: u8 = 0;
-const WATCHDOG_WROTE: u8 = 1;
-const WATCHDOG_FAILED: u8 = 2;
-
 /// Forces the stop if the stop token has not been sent by `deadline` after the start
 /// ([`serial_probe::watchdog_step`]), retrying failed writes ([`serial_probe::retry_stop`]).
 /// Prints nothing, for the same reason as [`emergency_stop`]; the main thread reports the result
@@ -135,12 +130,10 @@ fn spawn_watchdog(
                         &|| sent.load(Ordering::SeqCst),
                         &mut || thread::sleep(TICK),
                     );
-                    let result = match outcome {
-                        RetryOutcome::Written => WATCHDOG_WROTE,
-                        RetryOutcome::Failed => WATCHDOG_FAILED,
-                        RetryOutcome::AlreadySent => WATCHDOG_IDLE,
-                    };
-                    fired.store(result, Ordering::SeqCst);
+                    fired.store(
+                        WatchdogReport::from_retry(outcome).as_u8(),
+                        Ordering::SeqCst,
+                    );
                     return;
                 }
             }
@@ -365,7 +358,7 @@ fn probe(probe: &Probe) -> ExitCode {
     // Started before the run so that keys pressed during it are known (and dropped) later.
     let lines = probe.ask.as_ref().map(|_| spawn_stdin_lines());
     let mut session = Session::new(port, TerminalLog { file }, probe.eol, Arc::clone(&stop));
-    let fired = Arc::new(AtomicU8::new(WATCHDOG_IDLE));
+    let fired = Arc::new(AtomicU8::new(WatchdogReport::Idle.as_u8()));
     spawn_watchdog(
         Arc::clone(&stop_port),
         Arc::clone(&stop),
@@ -408,19 +401,30 @@ fn probe(probe: &Probe) -> ExitCode {
     thread::sleep(AFTER_STOP);
     drop(session); // retries the stop once more if it failed
 
-    match fired.load(Ordering::SeqCst) {
-        WATCHDOG_WROTE => warn(
-            "the watchdog sent the stop token: the run did not stop on time \
-             (was the terminal output paused with Ctrl-S?)",
-        ),
-        WATCHDOG_FAILED => warn(&format!(
-            "{STOP_FAILED} (the watchdog could not write the stop token; the run did not stop on time)"
-        )),
-        _ => {}
-    }
+    report_watchdog(
+        WatchdogReport::from_u8(fired.load(Ordering::SeqCst)),
+        stopped.is_ok(),
+    );
     let exit = serial_probe::exit_status(&outcome, observed.as_ref(), stopped.is_ok());
     report_exit(exit, &stopped, observed.as_ref(), &outcome);
     ExitCode::from(exit.code())
+}
+
+/// Tells the person what the watchdog did. `main_stopped` is whether the main thread's own stop
+/// succeeded afterwards.
+fn report_watchdog(report: Option<WatchdogReport>, main_stopped: bool) {
+    const LATE: &str = "the run did not stop on time (was the terminal output paused with Ctrl-S?)";
+    match report {
+        Some(WatchdogReport::Idle) => {}
+        Some(WatchdogReport::Wrote) => warn(&format!("the watchdog sent the stop token: {LATE}")),
+        Some(WatchdogReport::Failed) if main_stopped => warn(&format!(
+            "the watchdog could not write the stop token, the program sent it later: {LATE}"
+        )),
+        Some(WatchdogReport::Failed) => warn(&format!(
+            "{STOP_FAILED} (the watchdog could not write the stop token either)"
+        )),
+        None => warn("the watchdog left an unknown report"),
+    }
 }
 
 /// Tells the person why the program ends this way.

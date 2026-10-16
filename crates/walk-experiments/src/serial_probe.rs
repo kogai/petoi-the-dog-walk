@@ -488,6 +488,47 @@ pub fn retry_stop(
     RetryOutcome::Failed
 }
 
+/// What the watchdog did, shared with the main thread as a `u8` ([`WatchdogReport::as_u8`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WatchdogReport {
+    /// It did not fire, or the main thread sent the stop token while it was retrying.
+    Idle,
+    /// It wrote the stop token.
+    Wrote,
+    /// Every attempt to write the stop token failed.
+    Failed,
+}
+
+impl WatchdogReport {
+    /// The value stored in the shared atomic.
+    #[must_use]
+    pub fn as_u8(self) -> u8 {
+        match self {
+            Self::Idle => 0,
+            Self::Wrote => 1,
+            Self::Failed => 2,
+        }
+    }
+
+    /// Reads the shared value back. `None` for a value no report produces.
+    #[must_use]
+    pub fn from_u8(value: u8) -> Option<Self> {
+        [Self::Idle, Self::Wrote, Self::Failed]
+            .into_iter()
+            .find(|r| r.as_u8() == value)
+    }
+
+    /// The report for a finished [`retry_stop`].
+    #[must_use]
+    pub fn from_retry(outcome: RetryOutcome) -> Self {
+        match outcome {
+            RetryOutcome::Written => Self::Wrote,
+            RetryOutcome::Failed => Self::Failed,
+            RetryOutcome::AlreadySent => Self::Idle,
+        }
+    }
+}
+
 /// What the signal handler does after [`force_stop`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SignalAction {
@@ -1641,5 +1682,29 @@ mod tests {
 
         assert_eq!(result, RetryOutcome::AlreadySent);
         assert_eq!(attempts, 1);
+    }
+
+    #[test]
+    fn watchdog_report_round_trips_through_u8() {
+        for r in [
+            WatchdogReport::Idle,
+            WatchdogReport::Wrote,
+            WatchdogReport::Failed,
+        ] {
+            assert_eq!(WatchdogReport::from_u8(r.as_u8()), Some(r));
+        }
+        assert_eq!(WatchdogReport::from_u8(7), None);
+        assert_eq!(
+            WatchdogReport::from_retry(RetryOutcome::Written),
+            WatchdogReport::Wrote
+        );
+        assert_eq!(
+            WatchdogReport::from_retry(RetryOutcome::Failed),
+            WatchdogReport::Failed
+        );
+        assert_eq!(
+            WatchdogReport::from_retry(RetryOutcome::AlreadySent),
+            WatchdogReport::Idle
+        );
     }
 }
