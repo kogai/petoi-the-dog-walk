@@ -8,7 +8,7 @@
 
 | ID | 手順書 | 状態 |
 |---|---|---|
-| E00 | [E00-connectivity.md](E00-connectivity.md) | 実施済み |
+| E00 | [E00-connectivity.md](E00-connectivity.md) | 反映済み |
 | E01 | [E01-imu-readout.md](E01-imu-readout.md) | 依頼中 |
 | E02 | — | 未依頼 |
 | E04 | [E04-wifi-raw-command.md](E04-wifi-raw-command.md) | 依頼中 |
@@ -20,6 +20,9 @@
 | E10 | — | 未依頼 |
 | E11 | — | 未依頼 |
 | E12 | — | 未依頼 |
+| E13 | — | 未依頼 |
+| E14 | — | 未依頼 |
+| E15 | — | 未依頼 |
 
 E09〜E12 は計画だけで、依頼するかは [D-13](../docs/design/decisions.md) で決める（[08](../docs/design/08-navigation.md) 5節）。
 
