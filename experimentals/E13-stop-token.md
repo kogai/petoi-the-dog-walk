@@ -120,7 +120,7 @@ B-1 の結果で、次のどちらか一方を行う（2回）。どちらにも
   E00_FINAL_WAIT_MS=1000 E00_ASK_AFTER_STOP_MS=2000 E00_ASK='前脚付近のサーボは、今動いていますか？' E00_LOG=experimentals/raw/e13-b2-1.txt ./target/release/e00-serial-probe <PORT> kwkF
   E00_FINAL_WAIT_MS=1000 E00_ASK_AFTER_STOP_MS=2000 E00_ASK='前脚付近のサーボは、今動いていますか？' E00_LOG=experimentals/raw/e13-b2-2.txt ./target/release/e00-serial-probe <PORT> kwkF
   ```
-- B-2B（B-1a が2回とも `answer: yes`、B-1b が2回とも `answer: no`）: `kwkF` の 0.2 秒後に `d` を送り、その 0.8 秒後（`kwkF` から 1 秒後。B-1a と同じ時刻）に問う。
+- B-2B（B-1a が2回とも `answer: yes` で、B-2A の条件に当てはまらないとき）: `kwkF` の 0.2 秒後に `d` を送り、その 0.8 秒後（`kwkF` から 1 秒後。B-1a と同じ時刻）に問う。
   ```sh
   E00_FINAL_WAIT_MS=200 E00_ASK_AFTER_STOP_MS=800 E00_ASK='前脚付近のサーボは、今動いていますか？' E00_LOG=experimentals/raw/e13-b2-1.txt ./target/release/e00-serial-probe <PORT> kwkF
   E00_FINAL_WAIT_MS=200 E00_ASK_AFTER_STOP_MS=800 E00_ASK='前脚付近のサーボは、今動いていますか？' E00_LOG=experimentals/raw/e13-b2-2.txt ./target/release/e00-serial-probe <PORT> kwkF
