@@ -454,6 +454,40 @@ pub fn force_stop<W: Write>(requested: &AtomicBool, port: &mut W, eol: LineEndin
     ForcedStop { first, written }
 }
 
+/// How [`retry_stop`] ended.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RetryOutcome {
+    /// One of the attempts wrote the stop token.
+    Written,
+    /// The main thread sent the stop token meanwhile.
+    AlreadySent,
+    /// Every attempt failed.
+    Failed,
+}
+
+/// Tries to write the stop token up to `attempts` times, with `pause` between attempts, until a
+/// write succeeds or `already_sent` says the main thread has sent it. Used by the watchdog, whose
+/// single failed write would otherwise leave the robot moving while the main thread is stuck.
+pub fn retry_stop(
+    attempts: u32,
+    write: &mut dyn FnMut() -> bool,
+    already_sent: &dyn Fn() -> bool,
+    pause: &mut dyn FnMut(),
+) -> RetryOutcome {
+    for attempt in 1..=attempts {
+        if write() {
+            return RetryOutcome::Written;
+        }
+        if already_sent() {
+            return RetryOutcome::AlreadySent;
+        }
+        if attempt < attempts {
+            pause();
+        }
+    }
+    RetryOutcome::Failed
+}
+
 /// What the signal handler does after [`force_stop`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SignalAction {
@@ -679,7 +713,7 @@ pub fn exit_status(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::cell::RefCell;
+    use std::cell::{Cell, RefCell};
     use std::collections::HashMap;
     use std::rc::Rc;
 
@@ -1550,5 +1584,62 @@ mod tests {
         assert_eq!(signal_action(true, false), SignalAction::Continue);
         assert_eq!(signal_action(false, true), SignalAction::Exit);
         assert_eq!(signal_action(false, false), SignalAction::WaitForMain);
+    }
+    #[test]
+    fn retry_stops_at_the_first_successful_write() {
+        let mut attempts = 0;
+
+        let result = retry_stop(
+            5,
+            &mut || {
+                attempts += 1;
+                attempts == 3
+            },
+            &|| false,
+            &mut || {},
+        );
+
+        assert_eq!(result, RetryOutcome::Written);
+        assert_eq!(attempts, 3);
+    }
+
+    #[test]
+    fn retry_gives_up_after_the_limit() {
+        let mut attempts = 0;
+        let mut pauses = 0;
+
+        let result = retry_stop(
+            4,
+            &mut || {
+                attempts += 1;
+                false
+            },
+            &|| false,
+            &mut || pauses += 1,
+        );
+
+        assert_eq!(result, RetryOutcome::Failed);
+        assert_eq!(attempts, 4);
+        assert_eq!(pauses, 3);
+    }
+
+    #[test]
+    fn retry_ends_when_the_main_thread_has_sent_the_stop() {
+        let sent = Cell::new(false);
+        let mut attempts = 0;
+
+        let result = retry_stop(
+            5,
+            &mut || {
+                attempts += 1;
+                sent.set(true); // the main thread got going and sent `d` meanwhile
+                false
+            },
+            &|| sent.get(),
+            &mut || {},
+        );
+
+        assert_eq!(result, RetryOutcome::AlreadySent);
+        assert_eq!(attempts, 1);
     }
 }

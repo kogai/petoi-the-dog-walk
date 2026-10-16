@@ -31,7 +31,8 @@ use std::time::{Duration, Instant};
 
 use walk_experiments::serial_probe::{
     self, BAUD_RATE, Command, Exit, ForcedStop, Input, LineEnding, Log, Observed, Outcome, Probe,
-    Prompt, STOP_FAILED, Session, SignalAction, WatchdogStep, hide_port, show_bytes, write_stop,
+    Prompt, RetryOutcome, STOP_FAILED, Session, SignalAction, WatchdogStep, hide_port, show_bytes,
+    write_stop,
 };
 
 /// Read and write timeout on the port, so that a vanished device cannot hang a write.
@@ -97,14 +98,23 @@ fn emergency_stop(port: &StopPort, requested: &AtomicBool, eol: LineEnding) -> F
     }
 }
 
+/// Attempts the watchdog makes to write the stop token (one [`TICK`] apart).
+const WATCHDOG_ATTEMPTS: u32 = 20;
+
+/// What the watchdog did, for the main thread's report.
+const WATCHDOG_IDLE: u8 = 0;
+const WATCHDOG_WROTE: u8 = 1;
+const WATCHDOG_FAILED: u8 = 2;
+
 /// Forces the stop if the stop token has not been sent by `deadline` after the start
-/// ([`serial_probe::watchdog_step`]). Prints nothing, for the same reason as [`emergency_stop`];
-/// the main thread reports it through `fired` when it gets going again.
+/// ([`serial_probe::watchdog_step`]), retrying failed writes ([`serial_probe::retry_stop`]).
+/// Prints nothing, for the same reason as [`emergency_stop`]; the main thread reports the result
+/// through `fired` when it gets going again.
 fn spawn_watchdog(
     port: StopPort,
     requested: Arc<AtomicBool>,
     sent: Arc<AtomicBool>,
-    fired: Arc<AtomicBool>,
+    fired: Arc<AtomicU8>,
     eol: LineEnding,
     deadline: Duration,
 ) {
@@ -119,8 +129,18 @@ fn spawn_watchdog(
                 WatchdogStep::Keep => thread::sleep(TICK),
                 WatchdogStep::Done => return,
                 WatchdogStep::Fire => {
-                    fired.store(true, Ordering::SeqCst);
-                    let _ = emergency_stop(&port, &requested, eol);
+                    let outcome = serial_probe::retry_stop(
+                        WATCHDOG_ATTEMPTS,
+                        &mut || emergency_stop(&port, &requested, eol).written,
+                        &|| sent.load(Ordering::SeqCst),
+                        &mut || thread::sleep(TICK),
+                    );
+                    let result = match outcome {
+                        RetryOutcome::Written => WATCHDOG_WROTE,
+                        RetryOutcome::Failed => WATCHDOG_FAILED,
+                        RetryOutcome::AlreadySent => WATCHDOG_IDLE,
+                    };
+                    fired.store(result, Ordering::SeqCst);
                     return;
                 }
             }
@@ -291,11 +311,15 @@ fn open_port(
             // main thread is stuck on output. Nothing has been sent; send `d` anyway after the
             // board's possible reset, and refuse to run.
             let mut port = port;
-            let _ = write_stop(&mut port, probe.eol);
+            let stopped = write_stop(&mut port, probe.eol);
             warn(&format!(
                 "no independent stop path, refusing to run: {}",
                 hide_port(&e.to_string(), &probe.port)
             ));
+            if let Err(e) = stopped {
+                warn(&format!("{STOP_FAILED} ({})", e.kind()));
+                return Err(ExitCode::from(Exit::StopFailed.code()));
+            }
             return Err(ExitCode::from(1));
         }
     }
@@ -341,7 +365,7 @@ fn probe(probe: &Probe) -> ExitCode {
     // Started before the run so that keys pressed during it are known (and dropped) later.
     let lines = probe.ask.as_ref().map(|_| spawn_stdin_lines());
     let mut session = Session::new(port, TerminalLog { file }, probe.eol, Arc::clone(&stop));
-    let fired = Arc::new(AtomicBool::new(false));
+    let fired = Arc::new(AtomicU8::new(WATCHDOG_IDLE));
     spawn_watchdog(
         Arc::clone(&stop_port),
         Arc::clone(&stop),
@@ -384,11 +408,15 @@ fn probe(probe: &Probe) -> ExitCode {
     thread::sleep(AFTER_STOP);
     drop(session); // retries the stop once more if it failed
 
-    if fired.load(Ordering::SeqCst) {
-        warn(
+    match fired.load(Ordering::SeqCst) {
+        WATCHDOG_WROTE => warn(
             "the watchdog sent the stop token: the run did not stop on time \
              (was the terminal output paused with Ctrl-S?)",
-        );
+        ),
+        WATCHDOG_FAILED => warn(&format!(
+            "{STOP_FAILED} (the watchdog could not write the stop token; the run did not stop on time)"
+        )),
+        _ => {}
     }
     let exit = serial_probe::exit_status(&outcome, observed.as_ref(), stopped.is_ok());
     report_exit(exit, &stopped, observed.as_ref(), &outcome);
