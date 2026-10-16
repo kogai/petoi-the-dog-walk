@@ -185,7 +185,7 @@ fn valid_token(token: &str) -> bool {
 /// Invisible formatting characters that can reorder or hide text in a terminal or a pasted log
 /// (bidirectional controls, zero-width characters, the byte order mark).
 fn is_format_char(c: char) -> bool {
-    matches!(c, '\u{200b}'..='\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2060}'..='\u{206f}' | '\u{feff}')
+    matches!(c, '\u{061c}' | '\u{200b}'..='\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2060}'..='\u{206f}' | '\u{feff}')
 }
 
 fn valid_question(question: &str) -> bool {
@@ -1166,7 +1166,13 @@ mod tests {
 
     #[test]
     fn format_characters_in_the_question_are_rejected() {
-        for bad in ["a\u{202e}b", "a\u{200b}b", "a\u{2066}b", "a\u{feff}b"] {
+        for bad in [
+            "a\u{061c}b",
+            "a\u{202e}b",
+            "a\u{200b}b",
+            "a\u{2066}b",
+            "a\u{feff}b",
+        ] {
             assert_eq!(
                 parse(&args(&["PORT", "kwkF"]), env_of(&[("E00_ASK", bad)])),
                 Err(ConfigError::BadQuestion),
