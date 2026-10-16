@@ -1,6 +1,6 @@
 # 確認済みの事実
 
-公式ドキュメントまたはリポジトリのコードを読んで確認した事実だけを置く。
+公式ドキュメントまたはリポジトリのコードを読んで確認した事実と、記録済みの実験結果だけを置く（[documentation.md](../rules/documentation.md)）。
 設計書からは ID（例: F-B1）で参照する。出典は各節の末尾と [README の参考リンク](../../README.md#参考リンク) にある。
 
 > この内容は、最初の README（[計画書](https://github.com/kogai/petoi-the-dog-walk/blob/5174b74/README.md)）の「4. 確認済みの事実」を移したもの。
@@ -27,6 +27,23 @@
 - F-B8: [ESP8266WiFiController.ino](https://github.com/PetoiCamp/OpenCat/blob/24563ca2e0218150f6299d013cd3a20c45433467/ModuleTests/ESP8266WiFiController/ESP8266WiFiController.ino)、[actions.h](https://github.com/PetoiCamp/OpenCat/blob/24563ca2e0218150f6299d013cd3a20c45433467/ModuleTests/ESP8266WiFiController/actions.h)（コミット `24563ca` のコードで確認）
 
 > 事実ごとの出典の対応は、計画書の時点で記録されていなかった。上は文書の範囲から当てたもの。個々の事実を設計の根拠にするときは、該当ページで確かめ直し、この対応を直す。
+
+## Bittle の実機（実験で確認）
+
+条件: 標準ファーム（起動の表示に `N_260806`）、USB アダプタでシリアル接続、115200 baud、改行は LF（F-B12 を除く）、脚を付けていない Bittle、macOS 26.5.1（arm64）。回数が少ないので、値は目安。
+
+| ID | 事実 |
+|---|---|
+| F-B9 | Mac がシリアルポートを開くたびに、起動の表示（`* Start *`、`Bittle`、`N_260806`、`IMU`、`Servo:`、`Skill`、`Ready!`）が出る。`Ready!` はポートを開いてから約 5.5 秒後。`Ready!` より前に送ったトークンは崩れることがある（`khi` が `?hi` として返った）。ポートを開くことで再起動しているかは未確認 |
+| F-B10 | 起動後の最初の `k` で始まるトークンには、約 30 ms で `G` が返る。続けて送った2つ目の `khi` には `G` は返らなかった。`G` の意味は未確認 |
+| F-B11 | `k` で始まるトークンを送ると、しばらくして `k` が返る。送ってから `k` までの時間（1回の実行で1トークン）: `kwkF` 375 ms、`kbalance` 844 ms、`ksit` 932 ms、`khi` 5486／5506／5503 ms（3回） |
+| F-B12 | 知らないトークン（`kzzz`）には、12〜32 ms で `?zzz`（先頭の `k` を除いた名前に `?` を付けたもの）が返る。改行を CRLF にすると、知っているトークンも `?<名前>\r` と返り、動作しない |
+| F-B13 | `khi` を 2 秒あけて2回送ると、`k` は1つだけ返った。1回目の送信から 8604 ms、2回目から 6597 ms で、`khi` 1回分（F-B11）とは合わない（1回のみ） |
+| F-B14 | `kwkF` を1回だけ送ると、送ってから 5 秒後には、前脚付近のサーボは動いていなかった（人が見て答えた。脚を付けていない状態、1回のみ）。止まった時刻は測っていない |
+| F-B15 | 電池の電圧が低いと `Low power:6V` と表示される。起動の途中（`IMU` の行の約 3.9 秒後）で再起動することがある。`Low power` が出ていないときにも1回あった |
+| F-B16 | `serialport` クレート（`walk-experiments` の `e00-serial-probe`）で、macOS（arm64）の USB シリアルを開き、送受信できた。Bluetooth シリアルは試していない |
+
+出典: E00（[experimentals/E00-connectivity.md](../../experimentals/E00-connectivity.md) の2つの「結果」節）。F-B9・F-B12・F-B15 の一部は書き直す前の手順書での記録（1つ目の結果節）、F-B10・F-B11・F-B13・F-B14・F-B16 は書き直した手順書での記録（2つ目の結果節）による。
 
 ## 動作トークン（F-T1、公式 `actions.h` で確認済み）
 
