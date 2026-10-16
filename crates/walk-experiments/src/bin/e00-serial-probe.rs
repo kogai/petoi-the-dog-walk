@@ -6,17 +6,24 @@
 //! on Ctrl-C / SIGTERM / SIGHUP and while unwinding from a panic; logging never panics; after a
 //! stop request no further token is sent (except in a microsecond race, followed by `d`). If `d`
 //! cannot be sent, the program says so and exits with status 3.
+//!
+//! With `E00_ASK`, after the final wait the program rings the bell and shows one yes/no question
+//! about what the robot is doing at that moment, sends `d`, and then reads the answer from the
+//! keyboard into the log (`walk_experiments::serial_probe::observe`).
 
+use std::cell::Cell;
 use std::fs::File;
 use std::io::{self, Read, Write};
 use std::process::ExitCode;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use walk_experiments::serial_probe::{
-    self, BAUD_RATE, Command, Log, Outcome, Probe, STOP_FAILED, Session, hide_port, show_bytes,
+    self, BAUD_RATE, Command, Exit, Input, Log, Observed, Outcome, Probe, Prompt, STOP_FAILED,
+    Session, hide_port, show_bytes,
 };
 
 /// Read and write timeout on the port, so that a vanished device cannot hang a write.
@@ -101,6 +108,62 @@ fn spawn_reader(mut reader: Box<dyn serialport::SerialPort>, start: Instant, log
     });
 }
 
+/// Reads keyboard lines on a separate thread, each with the time it arrived, so that waiting for
+/// an answer can still notice Ctrl-C and lines typed before the question can be ignored. The
+/// thread is left behind when the program ends.
+fn spawn_stdin_lines() -> Receiver<(Instant, String)> {
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        for line in io::stdin().lines() {
+            match line {
+                Ok(text) => {
+                    if tx.send((Instant::now(), text)).is_err() {
+                        return;
+                    }
+                }
+                Err(_) => return,
+            }
+        }
+    });
+    rx
+}
+
+/// Next keyboard line typed after the question was shown (`asked_at`); earlier lines, such as
+/// keys pressed by accident while the robot was moving, are dropped.
+fn next_line(
+    lines: &Receiver<(Instant, String)>,
+    asked_at: Option<Instant>,
+    stop: &AtomicBool,
+) -> Input {
+    loop {
+        if stop.load(Ordering::SeqCst) {
+            return Input::Stopped;
+        }
+        match lines.recv_timeout(TICK) {
+            Ok((at, text)) => {
+                if asked_at.is_some_and(|asked| at >= asked) {
+                    return Input::Line(text);
+                }
+            }
+            Err(RecvTimeoutError::Timeout) => {}
+            Err(RecvTimeoutError::Disconnected) => return Input::End,
+        }
+    }
+}
+
+/// Shows a prompt on stderr, apart from the robot's responses on stdout and not in the log file.
+/// The question rings the bell.
+fn show_prompt(prompt: Prompt<'_>) {
+    let mut out = io::stderr().lock();
+    let _ = match prompt {
+        Prompt::LookNow(question) => writeln!(out, "\x07>>> LOOK NOW: {question}"),
+        Prompt::TypeAnswer => writeln!(
+            out,
+            ">>> answer y (yes), n (no) or ? (could not tell), then press Enter:"
+        ),
+    };
+}
+
 /// Creates the log file, and its folder if needed (`experimentals/raw/` is not in the repository).
 fn open_log(path: Option<&str>) -> io::Result<Option<File>> {
     path.map(|p| {
@@ -172,10 +235,31 @@ fn probe(probe: &Probe) -> ExitCode {
         )),
     }
 
+    // Started before the run so that keys pressed during it are known (and dropped) later.
+    let lines = probe.ask.as_ref().map(|_| spawn_stdin_lines());
     let mut session = Session::new(port, TerminalLog { file }, probe.eol, Arc::clone(&stop));
     let outcome = serial_probe::run(&mut session, &probe.tokens, probe.timing, &mut |d| {
         sleep_unless_stopped(d, &stop)
     });
+    let observed = match (&outcome, probe.ask.as_deref(), lines.as_ref()) {
+        (Ok(Outcome::Completed), Some(question), Some(lines)) => {
+            let asked_at = Cell::new(None);
+            Some(serial_probe::observe(
+                &mut session,
+                question,
+                &mut |d| sleep_unless_stopped(d, &stop),
+                &mut |prompt| {
+                    if matches!(prompt, Prompt::LookNow(_)) {
+                        asked_at.set(Some(Instant::now()));
+                    }
+                    show_prompt(prompt);
+                },
+                &mut || next_line(lines, asked_at.get(), &stop),
+            ))
+        }
+        _ => None,
+    };
+    // Already sent by `observe` when it asked; then this is a no-op that reports success.
     let stopped = session.stop();
     state.store(
         if stopped.is_ok() {
@@ -188,20 +272,38 @@ fn probe(probe: &Probe) -> ExitCode {
     thread::sleep(AFTER_STOP);
     drop(session); // retries the stop once more if it failed
 
-    if let Err(e) = stopped {
-        warn(&format!("{STOP_FAILED} ({})", e.kind()));
-        return ExitCode::from(3);
-    }
-    match outcome {
-        Ok(Outcome::Completed) => ExitCode::SUCCESS,
-        Ok(Outcome::Interrupted) => {
-            warn("interrupted; stop token sent");
-            ExitCode::from(130)
+    let exit = serial_probe::exit_status(&outcome, observed.as_ref(), stopped.is_ok());
+    report_exit(exit, &stopped, observed.as_ref(), &outcome);
+    ExitCode::from(exit.code())
+}
+
+/// Tells the person why the program ends this way.
+fn report_exit(
+    exit: Exit,
+    stopped: &io::Result<()>,
+    observed: Option<&io::Result<Observed>>,
+    outcome: &io::Result<Outcome>,
+) {
+    match exit {
+        Exit::Success => {}
+        Exit::Interrupted => warn("interrupted; stop token sent"),
+        Exit::SendFailed => {
+            if let Err(e) = outcome {
+                warn(&format!("send failed ({}); stop token sent", e.kind()));
+            }
         }
-        Err(e) => {
-            warn(&format!("send failed ({}); stop token sent", e.kind()));
-            ExitCode::from(1)
+        Exit::StopRetried => {
+            if let Some(Err(e)) = observed {
+                warn(&format!(
+                    "the first stop attempt failed ({}); the retry sent the stop token",
+                    e.kind()
+                ));
+            }
         }
+        Exit::StopFailed => match stopped {
+            Err(e) => warn(&format!("{STOP_FAILED} ({})", e.kind())),
+            Ok(()) => warn(STOP_FAILED),
+        },
     }
 }
 
