@@ -21,7 +21,7 @@
 |---|---|---|
 | `code-reviewer` | 正しさ、型、テストの有無と質、純粋な核と殻の分け方、境界の守り方 | Rust のコード（`crates/`）か、ハーネスの設定を変えたとき |
 | `design-reviewer` | 設計書との食い違い、事実と設計案の書き分け、決定事項の記録漏れ | `docs/` を変えたとき、または クレートの構成や境界の trait・型を変えたとき |
-| `safety-reviewer` | 実機を動かす経路: 停止トークンの送信、非常停止、送信の許可リスト、タイムアウト、秘密情報 | `walk-bittle`・`walk-app`、`walk-core` の調停・`Token`・トークン表・`Transport` trait、実機を動かす実験用の実行ファイル、Cargo のプロファイルを変えたとき |
+| `safety-reviewer` | 実機を動かす経路: 停止の送信、非常停止、送信の許可リスト（`Action` とドライバーの表）、タイムアウト、ADR-0001 2.6節の安全の不変条件、秘密情報 | `walk-bittle`（`Token`・トークン表・リンクを含む、実機を動かすドライバー）・`walk-app`、`walk-core` の調停・`Action`・`Transport`・`Link`・`Clock` の trait、実機を動かす実験用の実行ファイル、Cargo のプロファイル、ADR-0001 の 2.6節を変えたとき |
 | `experiment-reviewer` | 実験手順が人だけで再現できるか、判定基準が明確か、安全か | `experimentals/` を変えたとき |
 
 複数に当てはまるときは全部を実行する。互いに独立なので並列に実行してよい。
