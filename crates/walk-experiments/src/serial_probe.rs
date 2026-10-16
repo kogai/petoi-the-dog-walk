@@ -145,7 +145,8 @@ impl fmt::Display for ConfigError {
 pub const USAGE: &str = "usage: e00-serial-probe <PORT> <TOKEN>...\n       e00-serial-probe --list\n\
 env: E00_WAIT_MS (100..=10000, default 3000), E00_FINAL_WAIT_MS (100..=10000, default E00_WAIT_MS),\n     \
 E00_SETTLE_MS (0..=10000, default 2000), E00_EOL (LF or CRLF, default LF), E00_LOG (log file),\n     \
-E00_ASK (a yes/no question shown with a bell after the final wait; answered after the stop token)";
+E00_ASK (a yes/no question shown with a bell after the final wait; the robot keeps moving\n     \
+1.5 s longer to be looked at, then the stop token is sent and the answer is typed)";
 
 fn millis(
     env: &impl Fn(&str) -> Option<String>,
@@ -181,8 +182,17 @@ fn valid_token(token: &str) -> bool {
         && token.bytes().all(|b| b.is_ascii_alphanumeric())
 }
 
+/// Invisible formatting characters that can reorder or hide text in a terminal or a pasted log
+/// (bidirectional controls, zero-width characters, the byte order mark).
+fn is_format_char(c: char) -> bool {
+    matches!(c, '\u{200b}'..='\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2060}'..='\u{206f}' | '\u{feff}')
+}
+
 fn valid_question(question: &str) -> bool {
-    question.chars().count() <= MAX_QUESTION_CHARS && !question.chars().any(char::is_control)
+    question.chars().count() <= MAX_QUESTION_CHARS
+        && !question
+            .chars()
+            .any(|c| c.is_control() || is_format_char(c))
 }
 
 /// Parses the arguments (without the program name) and environment.
@@ -445,6 +455,17 @@ pub enum Prompt<'a> {
     TypeAnswer,
 }
 
+/// One read from the keyboard while [`observe`] waits for the answer.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Input {
+    /// A line the person typed.
+    Line(String),
+    /// Input ended.
+    End,
+    /// A stop was requested (Ctrl-C) while waiting.
+    Stopped,
+}
+
 /// How [`observe`] ended.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Observed {
@@ -452,14 +473,15 @@ pub enum Observed {
     Answered(Answer),
     /// Input ended, or too many invalid answers.
     NoAnswer,
-    /// A stop was requested while looking; the stop token was sent and nothing was asked.
+    /// A stop was requested while looking or while waiting for the answer; the stop token was
+    /// sent and no answer was recorded.
     Interrupted,
 }
 
 /// Asks one question about what the robot is doing *now*, so that the person watching has to
 /// remember nothing: logs and shows the question (`show` also rings the bell), gives
 /// [`LOOK_TIME`] to look, sends the stop token, and only then reads the answer, so the robot is
-/// not left moving while the person types. `read_line` returns `None` when input ends.
+/// not left moving while the person types.
 ///
 /// # Errors
 /// The stop token's write error; no answer is read then.
@@ -468,7 +490,7 @@ pub fn observe<W: Write, L: Log>(
     question: &str,
     sleep: &mut dyn FnMut(Duration) -> bool,
     show: &mut dyn FnMut(Prompt<'_>),
-    read_line: &mut dyn FnMut() -> Option<String>,
+    read_line: &mut dyn FnMut() -> Input,
 ) -> io::Result<Observed> {
     session.note(&format!("?? {question}"));
     show(Prompt::LookNow(question));
@@ -479,16 +501,74 @@ pub fn observe<W: Write, L: Log>(
     }
     for _ in 0..MAX_ANSWER_ATTEMPTS {
         show(Prompt::TypeAnswer);
-        let Some(line) = read_line() else {
-            break;
-        };
-        if let Some(answer) = parse_answer(&line) {
-            session.note(&format!("answer: {}", answer.label()));
-            return Ok(Observed::Answered(answer));
+        match read_line() {
+            Input::Line(line) => {
+                if let Some(answer) = parse_answer(&line) {
+                    session.note(&format!("answer: {}", answer.label()));
+                    return Ok(Observed::Answered(answer));
+                }
+            }
+            Input::End => break,
+            Input::Stopped => {
+                session.note("answer: interrupted");
+                return Ok(Observed::Interrupted);
+            }
         }
     }
     session.note("answer: none");
     Ok(Observed::NoAnswer)
+}
+
+/// How the program ends, from the most important problem down.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Exit {
+    /// Everything was sent and the stop token went out the first time.
+    Success,
+    /// A stop was requested; the stop token was sent.
+    Interrupted,
+    /// A token could not be written; the stop token was sent.
+    SendFailed,
+    /// The first stop attempt failed and a retry was needed. The robot kept moving a little
+    /// longer than planned, so the run is not a clean one.
+    StopRetried,
+    /// The stop token could not be sent at all.
+    StopFailed,
+}
+
+impl Exit {
+    /// The process exit status.
+    #[must_use]
+    pub fn code(self) -> u8 {
+        match self {
+            Self::Success => 0,
+            Self::SendFailed => 1,
+            Self::StopRetried | Self::StopFailed => 3,
+            Self::Interrupted => 130,
+        }
+    }
+}
+
+/// Decides how the program ends. `stop_ok` is whether the final stop attempt succeeded.
+#[must_use]
+pub fn exit_status(
+    outcome: &io::Result<Outcome>,
+    observed: Option<&io::Result<Observed>>,
+    stop_ok: bool,
+) -> Exit {
+    if !stop_ok {
+        return Exit::StopFailed;
+    }
+    if matches!(observed, Some(Err(_))) {
+        return Exit::StopRetried;
+    }
+    match outcome {
+        Err(_) => Exit::SendFailed,
+        Ok(Outcome::Interrupted) => Exit::Interrupted,
+        Ok(Outcome::Completed) => match observed {
+            Some(Ok(Observed::Interrupted)) => Exit::Interrupted,
+            Some(Ok(Observed::Answered(_) | Observed::NoAnswer) | Err(_)) | None => Exit::Success,
+        },
+    }
 }
 
 #[cfg(test)]
@@ -980,6 +1060,9 @@ mod tests {
         assert_eq!(parse_answer("maybe"), None);
     }
 
+    /// In scripted answers: Ctrl-C while waiting for the answer.
+    const STOPPED: &str = "<stopped>";
+
     /// Runs `observe` with scripted answers and records the order of events.
     fn observe_with(
         answers: &[&str],
@@ -988,7 +1071,14 @@ mod tests {
         let (port, log) = (FakePort::default(), Lines::default());
         let (mut s, _) = session(&port, &log);
         let events = Rc::new(RefCell::new(Vec::new()));
-        let mut queue: Vec<String> = answers.iter().rev().map(|a| (*a).to_owned()).collect();
+        let mut queue: Vec<Input> = answers
+            .iter()
+            .rev()
+            .map(|a| match *a {
+                STOPPED => Input::Stopped,
+                text => Input::Line(text.to_owned()),
+            })
+            .collect();
         let (e1, e2, e3) = (Rc::clone(&events), Rc::clone(&events), Rc::clone(&events));
         let port_seen = port.clone();
         let result = observe(
@@ -1002,7 +1092,7 @@ mod tests {
             &mut || {
                 e3.borrow_mut()
                     .push(format!("read (port: {:?})", port_seen.text()));
-                queue.pop()
+                queue.pop().unwrap_or(Input::End)
             },
         );
         drop(s);
@@ -1044,10 +1134,81 @@ mod tests {
 
     #[test]
     fn too_many_invalid_answers_record_no_answer() {
-        let junk = vec!["x"; MAX_ANSWER_ATTEMPTS];
-        let (result, _, _, _) = observe_with(&junk, true);
+        let mut script = vec!["x"; MAX_ANSWER_ATTEMPTS];
+        script.push("y");
+        let (result, _, log, events) = observe_with(&script, true);
 
         assert_eq!(result.unwrap(), Observed::NoAnswer);
+        let reads = events.iter().filter(|e| e.starts_with("read ")).count();
+        assert_eq!(reads, MAX_ANSWER_ATTEMPTS);
+        assert!(log.0.borrow().iter().any(|l| l.ends_with("answer: none")));
+    }
+
+    #[test]
+    fn last_allowed_attempt_is_still_accepted() {
+        let mut script = vec!["x"; MAX_ANSWER_ATTEMPTS - 1];
+        script.push("y");
+        let (result, _, _, _) = observe_with(&script, true);
+
+        assert_eq!(result.unwrap(), Observed::Answered(Answer::Yes));
+    }
+
+    #[test]
+    fn stop_while_waiting_for_the_answer_is_an_interruption() {
+        let (result, port, log, _) = observe_with(&[STOPPED], true);
+
+        assert_eq!(result.unwrap(), Observed::Interrupted);
+        assert_eq!(port.text(), "\nd\n");
+        let lines = log.0.borrow();
+        assert!(lines.iter().any(|l| l.ends_with("answer: interrupted")));
+        assert!(!lines.iter().any(|l| l.ends_with("answer: none")));
+    }
+
+    #[test]
+    fn format_characters_in_the_question_are_rejected() {
+        for bad in ["a\u{202e}b", "a\u{200b}b", "a\u{2066}b", "a\u{feff}b"] {
+            assert_eq!(
+                parse(&args(&["PORT", "kwkF"]), env_of(&[("E00_ASK", bad)])),
+                Err(ConfigError::BadQuestion),
+                "{bad:?}"
+            );
+        }
+    }
+
+    // ---- exit status ----
+
+    #[test]
+    fn exit_codes_follow_the_most_important_problem() {
+        let ok: io::Result<Outcome> = Ok(Outcome::Completed);
+        let interrupted: io::Result<Outcome> = Ok(Outcome::Interrupted);
+        let send_failed: io::Result<Outcome> = Err(io::Error::other("send"));
+        let answered: io::Result<Observed> = Ok(Observed::Answered(Answer::Yes));
+        let no_answer: io::Result<Observed> = Ok(Observed::NoAnswer);
+        let observe_interrupted: io::Result<Observed> = Ok(Observed::Interrupted);
+        let observe_stop_failed: io::Result<Observed> = Err(io::Error::other("stop"));
+
+        assert_eq!(exit_status(&ok, None, true), Exit::Success);
+        assert_eq!(exit_status(&ok, Some(&answered), true), Exit::Success);
+        assert_eq!(exit_status(&ok, Some(&no_answer), true), Exit::Success);
+        assert_eq!(exit_status(&interrupted, None, true), Exit::Interrupted);
+        assert_eq!(
+            exit_status(&ok, Some(&observe_interrupted), true),
+            Exit::Interrupted
+        );
+        assert_eq!(exit_status(&send_failed, None, true), Exit::SendFailed);
+        // The first stop attempt failed inside `observe`, even if the retry worked.
+        assert_eq!(
+            exit_status(&ok, Some(&observe_stop_failed), true),
+            Exit::StopRetried
+        );
+        assert_eq!(exit_status(&ok, Some(&answered), false), Exit::StopFailed);
+        assert_eq!(exit_status(&send_failed, None, false), Exit::StopFailed);
+
+        assert_eq!(Exit::Success.code(), 0);
+        assert_eq!(Exit::SendFailed.code(), 1);
+        assert_eq!(Exit::StopFailed.code(), 3);
+        assert_eq!(Exit::StopRetried.code(), 3);
+        assert_eq!(Exit::Interrupted.code(), 130);
     }
 
     #[test]
@@ -1068,7 +1229,7 @@ mod tests {
 
         let result = observe(&mut s, "moving?", &mut |_| true, &mut |_| {}, &mut || {
             read = true;
-            None
+            Input::End
         });
         drop(s); // retries the stop
 
