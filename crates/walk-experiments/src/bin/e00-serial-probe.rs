@@ -6,17 +6,23 @@
 //! on Ctrl-C / SIGTERM / SIGHUP and while unwinding from a panic; logging never panics; after a
 //! stop request no further token is sent (except in a microsecond race, followed by `d`). If `d`
 //! cannot be sent, the program says so and exits with status 3.
+//!
+//! With `E00_ASK`, after the final wait the program rings the bell and shows one yes/no question
+//! about what the robot is doing at that moment, sends `d`, and then reads the answer from the
+//! keyboard into the log (`walk_experiments::serial_probe::observe`).
 
 use std::fs::File;
 use std::io::{self, Read, Write};
 use std::process::ExitCode;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use walk_experiments::serial_probe::{
-    self, BAUD_RATE, Command, Log, Outcome, Probe, STOP_FAILED, Session, hide_port, show_bytes,
+    self, BAUD_RATE, Command, Log, Observed, Outcome, Probe, Prompt, STOP_FAILED, Session,
+    hide_port, show_bytes,
 };
 
 /// Read and write timeout on the port, so that a vanished device cannot hang a write.
@@ -101,6 +107,51 @@ fn spawn_reader(mut reader: Box<dyn serialport::SerialPort>, start: Instant, log
     });
 }
 
+/// Reads keyboard lines on a separate thread, so that waiting for an answer can still notice
+/// Ctrl-C. The thread is left behind when the program ends.
+fn spawn_stdin_lines() -> Receiver<String> {
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        for line in io::stdin().lines() {
+            match line {
+                Ok(text) => {
+                    if tx.send(text).is_err() {
+                        return;
+                    }
+                }
+                Err(_) => return,
+            }
+        }
+    });
+    rx
+}
+
+/// Next keyboard line, or `None` when input ends or a stop was requested.
+fn next_line(lines: &Receiver<String>, stop: &AtomicBool) -> Option<String> {
+    loop {
+        if stop.load(Ordering::SeqCst) {
+            return None;
+        }
+        match lines.recv_timeout(TICK) {
+            Ok(text) => return Some(text),
+            Err(RecvTimeoutError::Timeout) => {}
+            Err(RecvTimeoutError::Disconnected) => return None,
+        }
+    }
+}
+
+/// Shows a prompt on the terminal only (not in the log file). The question rings the bell.
+fn show_prompt(prompt: Prompt<'_>) {
+    let mut out = io::stdout().lock();
+    let _ = match prompt {
+        Prompt::LookNow(question) => writeln!(out, "\x07>>> LOOK NOW: {question}"),
+        Prompt::TypeAnswer => writeln!(
+            out,
+            ">>> answer y (yes), n (no) or ? (could not tell), then press Enter:"
+        ),
+    };
+}
+
 /// Creates the log file, and its folder if needed (`experimentals/raw/` is not in the repository).
 fn open_log(path: Option<&str>) -> io::Result<Option<File>> {
     path.map(|p| {
@@ -176,6 +227,20 @@ fn probe(probe: &Probe) -> ExitCode {
     let outcome = serial_probe::run(&mut session, &probe.tokens, probe.timing, &mut |d| {
         sleep_unless_stopped(d, &stop)
     });
+    let observed = match (&outcome, probe.ask.as_deref()) {
+        (Ok(Outcome::Completed), Some(question)) => {
+            let lines = spawn_stdin_lines();
+            Some(serial_probe::observe(
+                &mut session,
+                question,
+                &mut |d| sleep_unless_stopped(d, &stop),
+                &mut show_prompt,
+                &mut || next_line(&lines, &stop),
+            ))
+        }
+        _ => None,
+    };
+    // Already sent by `observe` when it asked; then this is a no-op that reports success.
     let stopped = session.stop();
     state.store(
         if stopped.is_ok() {
@@ -191,6 +256,10 @@ fn probe(probe: &Probe) -> ExitCode {
     if let Err(e) = stopped {
         warn(&format!("{STOP_FAILED} ({})", e.kind()));
         return ExitCode::from(3);
+    }
+    if let Some(Ok(Observed::Interrupted)) = observed {
+        warn("interrupted; stop token sent");
+        return ExitCode::from(130);
     }
     match outcome {
         Ok(Outcome::Completed) => ExitCode::SUCCESS,

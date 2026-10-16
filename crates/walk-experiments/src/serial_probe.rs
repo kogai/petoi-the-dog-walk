@@ -18,6 +18,12 @@ pub const BAUD_RATE: u32 = 115_200;
 pub const STOP_TOKEN: &str = "d";
 /// Longest token accepted on the command line.
 const MAX_TOKEN_LEN: usize = 16;
+/// Longest observation question (`E00_ASK`), in characters.
+const MAX_QUESTION_CHARS: usize = 120;
+/// Time to look at the robot after the question is shown, before the stop token is sent.
+pub const LOOK_TIME: Duration = Duration::from_millis(1500);
+/// Invalid answers accepted before the question is given up as unanswered.
+const MAX_ANSWER_ATTEMPTS: usize = 5;
 
 /// Line ending appended to each token.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -63,6 +69,8 @@ pub struct Probe {
     pub eol: LineEnding,
     /// File to write the log to, in addition to the terminal (`E00_LOG`).
     pub log_path: Option<String>,
+    /// One yes/no question for the person watching, asked after the final wait (`E00_ASK`).
+    pub ask: Option<String>,
 }
 
 /// What the binary should do.
@@ -101,6 +109,8 @@ pub enum ConfigError {
     },
     /// `E00_EOL` that is neither `LF` nor `CRLF`.
     BadLineEnding(String),
+    /// `E00_ASK` that is too long or contains control characters.
+    BadQuestion,
 }
 
 impl fmt::Display for ConfigError {
@@ -123,6 +133,10 @@ impl fmt::Display for ConfigError {
                 write!(f, "{name}={value} is outside {min}..={max}")
             }
             Self::BadLineEnding(v) => write!(f, "E00_EOL={v:?}: use LF or CRLF"),
+            Self::BadQuestion => write!(
+                f,
+                "E00_ASK: use at most {MAX_QUESTION_CHARS} characters and no control characters"
+            ),
         }
     }
 }
@@ -130,7 +144,8 @@ impl fmt::Display for ConfigError {
 /// Usage text.
 pub const USAGE: &str = "usage: e00-serial-probe <PORT> <TOKEN>...\n       e00-serial-probe --list\n\
 env: E00_WAIT_MS (100..=10000, default 3000), E00_FINAL_WAIT_MS (100..=10000, default E00_WAIT_MS),\n     \
-E00_SETTLE_MS (0..=10000, default 2000), E00_EOL (LF or CRLF, default LF), E00_LOG (log file)";
+E00_SETTLE_MS (0..=10000, default 2000), E00_EOL (LF or CRLF, default LF), E00_LOG (log file),\n     \
+E00_ASK (a yes/no question shown with a bell after the final wait; answered after the stop token)";
 
 fn millis(
     env: &impl Fn(&str) -> Option<String>,
@@ -166,6 +181,10 @@ fn valid_token(token: &str) -> bool {
         && token.bytes().all(|b| b.is_ascii_alphanumeric())
 }
 
+fn valid_question(question: &str) -> bool {
+    question.chars().count() <= MAX_QUESTION_CHARS && !question.chars().any(char::is_control)
+}
+
 /// Parses the arguments (without the program name) and environment.
 ///
 /// # Errors
@@ -196,12 +215,19 @@ pub fn parse(
             let log_path = env("E00_LOG")
                 .map(|p| p.trim().to_owned())
                 .filter(|p| !p.is_empty());
+            let ask = match env("E00_ASK").map(|q| q.trim().to_owned()) {
+                Some(q) if q.is_empty() => None,
+                Some(q) if valid_question(&q) => Some(q),
+                Some(_) => return Err(ConfigError::BadQuestion),
+                None => None,
+            };
             Ok(Command::Probe(Probe {
                 port: port.clone(),
                 tokens: tokens.to_vec(),
                 timing,
                 eol,
                 log_path,
+                ask,
             }))
         }
         _ => Err(ConfigError::Usage),
@@ -374,6 +400,95 @@ pub fn run<W: Write, L: Log>(
         }
     }
     Ok(Outcome::Completed)
+}
+
+/// An answer to the observation question.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Answer {
+    /// `y`
+    Yes,
+    /// `n`
+    No,
+    /// `?`: the person could not tell.
+    Unknown,
+}
+
+impl Answer {
+    /// The word written to the log.
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Yes => "yes",
+            Self::No => "no",
+            Self::Unknown => "unknown",
+        }
+    }
+}
+
+/// Reads `y`/`yes`, `n`/`no` or `?` (case and surrounding spaces ignored).
+#[must_use]
+pub fn parse_answer(input: &str) -> Option<Answer> {
+    match input.trim().to_ascii_lowercase().as_str() {
+        "y" | "yes" => Some(Answer::Yes),
+        "n" | "no" => Some(Answer::No),
+        "?" => Some(Answer::Unknown),
+        _ => None,
+    }
+}
+
+/// What [`observe`] shows on the terminal.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Prompt<'a> {
+    /// The question, at the moment to look (the terminal rings the bell).
+    LookNow(&'a str),
+    /// The request to type the answer.
+    TypeAnswer,
+}
+
+/// How [`observe`] ended.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Observed {
+    /// The person answered.
+    Answered(Answer),
+    /// Input ended, or too many invalid answers.
+    NoAnswer,
+    /// A stop was requested while looking; the stop token was sent and nothing was asked.
+    Interrupted,
+}
+
+/// Asks one question about what the robot is doing *now*, so that the person watching has to
+/// remember nothing: logs and shows the question (`show` also rings the bell), gives
+/// [`LOOK_TIME`] to look, sends the stop token, and only then reads the answer, so the robot is
+/// not left moving while the person types. `read_line` returns `None` when input ends.
+///
+/// # Errors
+/// The stop token's write error; no answer is read then.
+pub fn observe<W: Write, L: Log>(
+    session: &mut Session<W, L>,
+    question: &str,
+    sleep: &mut dyn FnMut(Duration) -> bool,
+    show: &mut dyn FnMut(Prompt<'_>),
+    read_line: &mut dyn FnMut() -> Option<String>,
+) -> io::Result<Observed> {
+    session.note(&format!("?? {question}"));
+    show(Prompt::LookNow(question));
+    let looked = sleep(LOOK_TIME);
+    session.stop()?;
+    if !looked {
+        return Ok(Observed::Interrupted);
+    }
+    for _ in 0..MAX_ANSWER_ATTEMPTS {
+        show(Prompt::TypeAnswer);
+        let Some(line) = read_line() else {
+            break;
+        };
+        if let Some(answer) = parse_answer(&line) {
+            session.note(&format!("answer: {}", answer.label()));
+            return Ok(Observed::Answered(answer));
+        }
+    }
+    session.note("answer: none");
+    Ok(Observed::NoAnswer)
 }
 
 #[cfg(test)]
@@ -804,6 +919,161 @@ mod tests {
         drop(s);
 
         assert_eq!(outcome.unwrap(), Outcome::Interrupted);
+        assert_eq!(port.text(), "\nd\n");
+    }
+    // ---- observation question ----
+
+    #[test]
+    fn question_is_read_and_trimmed() {
+        let p = probe(&["PORT", "kwkF"], &[("E00_ASK", "  まだ動いていますか？ ")]);
+
+        assert_eq!(p.ask.as_deref(), Some("まだ動いていますか？"));
+    }
+
+    #[test]
+    fn no_question_by_default() {
+        let p = probe(&["PORT", "kwkF"], &[]);
+
+        assert_eq!(p.ask, None);
+    }
+
+    #[test]
+    fn empty_question_means_none() {
+        let p = probe(&["PORT", "kwkF"], &[("E00_ASK", "   ")]);
+
+        assert_eq!(p.ask, None);
+    }
+
+    #[test]
+    fn question_with_control_characters_is_rejected() {
+        let result = parse(
+            &args(&["PORT", "kwkF"]),
+            env_of(&[("E00_ASK", "moving?\x1b[2J")]),
+        );
+
+        assert_eq!(result, Err(ConfigError::BadQuestion));
+    }
+
+    #[test]
+    fn question_length_limit_is_in_characters() {
+        let ok = "あ".repeat(MAX_QUESTION_CHARS);
+        let long = "あ".repeat(MAX_QUESTION_CHARS + 1);
+
+        assert_eq!(
+            probe(&["PORT", "kwkF"], &[("E00_ASK", &ok)]).ask.as_deref(),
+            Some(ok.as_str())
+        );
+        assert_eq!(
+            parse(&args(&["PORT", "kwkF"]), env_of(&[("E00_ASK", &long)])),
+            Err(ConfigError::BadQuestion)
+        );
+    }
+
+    #[test]
+    fn answers_are_y_n_or_question_mark() {
+        assert_eq!(parse_answer("y"), Some(Answer::Yes));
+        assert_eq!(parse_answer(" YES \n"), Some(Answer::Yes));
+        assert_eq!(parse_answer("n"), Some(Answer::No));
+        assert_eq!(parse_answer("No"), Some(Answer::No));
+        assert_eq!(parse_answer("?"), Some(Answer::Unknown));
+        assert_eq!(parse_answer(""), None);
+        assert_eq!(parse_answer("maybe"), None);
+    }
+
+    /// Runs `observe` with scripted answers and records the order of events.
+    fn observe_with(
+        answers: &[&str],
+        look_ok: bool,
+    ) -> (io::Result<Observed>, FakePort, Lines, Vec<String>) {
+        let (port, log) = (FakePort::default(), Lines::default());
+        let (mut s, _) = session(&port, &log);
+        let events = Rc::new(RefCell::new(Vec::new()));
+        let mut queue: Vec<String> = answers.iter().rev().map(|a| (*a).to_owned()).collect();
+        let (e1, e2, e3) = (Rc::clone(&events), Rc::clone(&events), Rc::clone(&events));
+        let port_seen = port.clone();
+        let result = observe(
+            &mut s,
+            "moving?",
+            &mut |d| {
+                e1.borrow_mut().push(format!("sleep {}", d.as_millis()));
+                look_ok
+            },
+            &mut |prompt| e2.borrow_mut().push(format!("show {prompt:?}")),
+            &mut || {
+                e3.borrow_mut()
+                    .push(format!("read (port: {:?})", port_seen.text()));
+                queue.pop()
+            },
+        );
+        drop(s);
+        let events = events.borrow().clone();
+        (result, port, log, events)
+    }
+
+    #[test]
+    fn question_is_shown_then_robot_is_stopped_before_the_answer_is_read() {
+        let (result, port, log, events) = observe_with(&["y"], true);
+
+        assert_eq!(result.unwrap(), Observed::Answered(Answer::Yes));
+        assert!(events.first().is_some_and(|e| e.starts_with("show ")));
+        assert_eq!(events.get(1).map(String::as_str), Some("sleep 1500"));
+        // The stop token was already on the port when the answer was read.
+        assert!(events.iter().any(|e| e == "read (port: \"\\nd\\n\")"));
+        assert_eq!(port.text(), "\nd\n");
+        let lines = log.0.borrow();
+        assert!(lines.iter().any(|l| l.ends_with("?? moving?")));
+        assert!(lines.iter().any(|l| l.ends_with("answer: yes")));
+    }
+
+    #[test]
+    fn invalid_answers_are_asked_again() {
+        let (result, _, log, _) = observe_with(&["maybe", "", "n"], true);
+
+        assert_eq!(result.unwrap(), Observed::Answered(Answer::No));
+        assert!(log.0.borrow().iter().any(|l| l.ends_with("answer: no")));
+    }
+
+    #[test]
+    fn end_of_input_records_no_answer() {
+        let (result, port, log, _) = observe_with(&[], true);
+
+        assert_eq!(result.unwrap(), Observed::NoAnswer);
+        assert_eq!(port.text(), "\nd\n");
+        assert!(log.0.borrow().iter().any(|l| l.ends_with("answer: none")));
+    }
+
+    #[test]
+    fn too_many_invalid_answers_record_no_answer() {
+        let junk = vec!["x"; MAX_ANSWER_ATTEMPTS];
+        let (result, _, _, _) = observe_with(&junk, true);
+
+        assert_eq!(result.unwrap(), Observed::NoAnswer);
+    }
+
+    #[test]
+    fn interrupt_while_looking_stops_and_asks_nothing() {
+        let (result, port, _, events) = observe_with(&["y"], false);
+
+        assert_eq!(result.unwrap(), Observed::Interrupted);
+        assert_eq!(port.text(), "\nd\n");
+        assert!(!events.iter().any(|e| e.starts_with("read ")));
+    }
+
+    #[test]
+    fn failed_stop_is_returned_and_no_answer_is_read() {
+        let (port, log) = (FakePort::default(), Lines::default());
+        let (mut s, _) = session(&port, &log);
+        port.fail_next(1);
+        let mut read = false;
+
+        let result = observe(&mut s, "moving?", &mut |_| true, &mut |_| {}, &mut || {
+            read = true;
+            None
+        });
+        drop(s); // retries the stop
+
+        assert!(result.is_err());
+        assert!(!read);
         assert_eq!(port.text(), "\nd\n");
     }
 }
