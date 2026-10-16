@@ -21,7 +21,7 @@
 |---|---|---|
 | `code-reviewer` | 正しさ、型、テストの有無と質、純粋な核と殻の分け方、境界の守り方 | Rust のコード（`crates/`）か、ハーネスの設定を変えたとき |
 | `design-reviewer` | 設計書との食い違い、事実と設計案の書き分け、決定事項の記録漏れ | `docs/` を変えたとき、または クレートの構成や境界の trait・型を変えたとき |
-| `safety-reviewer` | 実機を動かす経路: 停止の送信、非常停止、送信の許可リスト（`Action` とドライバーの表）、タイムアウト、ADR-0001 2.6節の安全の不変条件、秘密情報 | 実機を動かすドライバーのクレート（今は `walk-bittle`。クレート名によらない）と、それが使う `Link` の実装（`Token`・トークン表を含む）、`walk-app`、`walk-core` の調停・スキルの展開・スキル名を `Action` に変える処理・`Action`・`Transport`・`Link`・`Clock` の trait、`walk-testing` の `FakeLink` と偽の時計、実機を動かす実験用の実行ファイル、Cargo のプロファイル、ADR-0001 2.6節・06-transport.md 2節・02-architecture.md 5節を変えたとき |
+| `safety-reviewer` | 実機を動かす経路: 停止の送信、非常停止、送信の許可リスト（`Action` とドライバーの表）、タイムアウト、ADR-0001 2.6節の安全の不変条件、秘密情報 | 実機を動かすドライバーのクレート（`Token`・トークン表を含む。今は `walk-bittle`。クレート名によらない）と、それが使う `Link` の実装、`walk-app`、`walk-core` の調停・スキルの展開、スキル名を `Action` に変える処理（置き場所によらない）・`Action`・`Transport`・`Link`・`Clock` の trait、`walk-testing` の `FakeLink` と偽の時計、実機を動かす実験用の実行ファイル、Cargo のプロファイル、ADR-0001 2.6節・06-transport.md 2節・02-architecture.md 5節を変えたとき |
 | `experiment-reviewer` | 実験手順が人だけで再現できるか、判定基準が明確か、安全か | `experimentals/` を変えたとき |
 
 複数に当てはまるときは全部を実行する。互いに独立なので並列に実行してよい。
