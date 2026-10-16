@@ -93,7 +93,7 @@ type StopPort = Arc<Mutex<Option<Box<dyn serialport::SerialPort>>>>;
 fn emergency_stop(port: &StopPort, requested: &AtomicBool, eol: LineEnding) -> ForcedStop {
     let mut guard = port.lock().unwrap_or_else(PoisonError::into_inner);
     match guard.as_mut() {
-        Some(p) => serial_probe::force_stop(requested, p, eol, std::thread::sleep),
+        Some(p) => serial_probe::force_stop(requested, p, eol),
         None => ForcedStop {
             first: !requested.swap(true, Ordering::SeqCst),
             written: false,
@@ -307,7 +307,7 @@ fn open_port(
             // main thread is stuck on output. Nothing has been sent; send `d` anyway after the
             // board's possible reset, and refuse to run.
             let mut port = port;
-            let stopped = write_stop(&mut port, probe.eol, std::thread::sleep);
+            let stopped = write_stop(&mut port, probe.eol);
             warn(&format!(
                 "no independent stop path, refusing to run: {}",
                 hide_port(&e.to_string(), &probe.port)
@@ -360,13 +360,7 @@ fn probe(probe: &Probe) -> ExitCode {
 
     // Started before the run so that keys pressed during it are known (and dropped) later.
     let lines = probe.ask.as_ref().map(|_| spawn_stdin_lines());
-    let mut session = Session::new(
-        port,
-        TerminalLog { file },
-        probe.eol,
-        Arc::clone(&stop),
-        std::thread::sleep,
-    );
+    let mut session = Session::new(port, TerminalLog { file }, probe.eol, Arc::clone(&stop));
     let fired = Arc::new(AtomicU8::new(WatchdogReport::Idle.as_u8()));
     spawn_watchdog(
         Arc::clone(&stop_port),
