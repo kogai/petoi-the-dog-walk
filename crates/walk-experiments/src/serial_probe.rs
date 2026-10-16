@@ -293,7 +293,7 @@ pub struct Session<W: Write, L: Log> {
     log: L,
     eol: LineEnding,
     stop_requested: Arc<AtomicBool>,
-    stop_sent: bool,
+    stop_sent: Arc<AtomicBool>,
     start: Instant,
 }
 
@@ -305,7 +305,7 @@ impl<W: Write, L: Log> Session<W, L> {
             log,
             eol,
             stop_requested,
-            stop_sent: false,
+            stop_sent: Arc::new(AtomicBool::new(false)),
             start: Instant::now(),
         }
     }
@@ -345,11 +345,11 @@ impl<W: Write, L: Log> Session<W, L> {
     /// # Errors
     /// The write error. The stop is then not marked as sent, so `Drop` tries again.
     pub fn stop(&mut self) -> io::Result<()> {
-        if self.stop_sent {
+        if self.stop_sent.load(Ordering::SeqCst) {
             return Ok(());
         }
         write_stop(&mut self.port, self.eol)?;
-        self.stop_sent = true;
+        self.stop_sent.store(true, Ordering::SeqCst);
         self.note(&format!("-> {STOP_TOKEN:?}"));
         Ok(())
     }
@@ -357,7 +357,13 @@ impl<W: Write, L: Log> Session<W, L> {
     /// Whether the stop token has been written.
     #[must_use]
     pub fn stop_sent(&self) -> bool {
-        self.stop_sent
+        self.stop_sent.load(Ordering::SeqCst)
+    }
+
+    /// A shared view of [`Session::stop_sent`], for a watchdog on another thread.
+    #[must_use]
+    pub fn stop_sent_flag(&self) -> Arc<AtomicBool> {
+        Arc::clone(&self.stop_sent)
     }
 }
 
@@ -402,6 +408,71 @@ pub fn stop_deadline(timing: Timing, tokens: usize, ask: bool) -> Duration {
         .saturating_add(waits)
         .saturating_add(look)
         .saturating_add(STOP_GRACE)
+}
+
+/// What the watchdog does at one look at the clock.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WatchdogStep {
+    /// Not yet due: look again later.
+    Keep,
+    /// The stop token was sent: nothing left to watch.
+    Done,
+    /// Due and the stop token was not sent: force the stop ([`force_stop`]).
+    Fire,
+}
+
+/// Decides the watchdog's step from the time since the start, the deadline
+/// ([`stop_deadline`]) and whether the stop token was already sent.
+#[must_use]
+pub fn watchdog_step(elapsed: Duration, deadline: Duration, stop_sent: bool) -> WatchdogStep {
+    if stop_sent {
+        WatchdogStep::Done
+    } else if elapsed >= deadline {
+        WatchdogStep::Fire
+    } else {
+        WatchdogStep::Keep
+    }
+}
+
+/// Result of [`force_stop`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ForcedStop {
+    /// No stop had been requested before.
+    pub first: bool,
+    /// The stop token was written.
+    pub written: bool,
+}
+
+/// Stops from outside the main thread (signal handler, watchdog): first requests the stop, so
+/// that the main thread sends no further token when it resumes, then writes the stop token to a
+/// second handle on the port. A token the main thread is writing at the same moment can still
+/// get through; the line ending before `d` keeps them apart, and the main thread sends `d` again
+/// when it stops.
+pub fn force_stop<W: Write>(requested: &AtomicBool, port: &mut W, eol: LineEnding) -> ForcedStop {
+    let first = !requested.swap(true, Ordering::SeqCst);
+    let written = write_stop(port, eol).is_ok();
+    ForcedStop { first, written }
+}
+
+/// What the signal handler does after [`force_stop`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SignalAction {
+    /// First request: let the main thread finish (it sends `d` again and reports).
+    Continue,
+    /// A repeated signal and `d` was written: end now.
+    Exit,
+    /// A repeated signal and `d` could not be written: wait for the main thread's attempt.
+    WaitForMain,
+}
+
+/// Decides the signal handler's action.
+#[must_use]
+pub fn signal_action(first: bool, written: bool) -> SignalAction {
+    match (first, written) {
+        (true, _) => SignalAction::Continue,
+        (false, true) => SignalAction::Exit,
+        (false, false) => SignalAction::WaitForMain,
+    }
 }
 
 /// How [`run`] ended.
@@ -1336,5 +1407,148 @@ mod tests {
             stop_deadline(timing, 0, false),
             Duration::from_millis(2000) + STOP_GRACE
         );
+    }
+    // ---- watchdog and signal decisions ----
+
+    #[test]
+    fn watchdog_keeps_waiting_before_the_deadline() {
+        let d = Duration::from_millis(1000);
+
+        assert_eq!(
+            watchdog_step(Duration::from_millis(999), d, false),
+            WatchdogStep::Keep
+        );
+    }
+
+    #[test]
+    fn watchdog_fires_at_the_deadline_if_the_stop_was_not_sent() {
+        let d = Duration::from_millis(1000);
+
+        assert_eq!(watchdog_step(d, d, false), WatchdogStep::Fire);
+        assert_eq!(watchdog_step(d * 2, d, false), WatchdogStep::Fire);
+    }
+
+    #[test]
+    fn watchdog_is_done_once_the_stop_was_sent() {
+        let d = Duration::from_millis(1000);
+
+        assert_eq!(watchdog_step(Duration::ZERO, d, true), WatchdogStep::Done);
+        assert_eq!(watchdog_step(d * 2, d, true), WatchdogStep::Done);
+    }
+
+    /// A port that records whether the stop was already requested when it was written to.
+    struct CheckingPort {
+        requested: Arc<AtomicBool>,
+        seen: Rc<RefCell<Vec<bool>>>,
+        inner: FakePort,
+    }
+
+    impl Write for CheckingPort {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            self.seen
+                .borrow_mut()
+                .push(self.requested.load(Ordering::SeqCst));
+            self.inner.write(buf)
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn force_stop_requests_the_stop_before_writing() {
+        let requested = Arc::new(AtomicBool::new(false));
+        let seen = Rc::new(RefCell::new(Vec::new()));
+        let inner = FakePort::default();
+        let mut port = CheckingPort {
+            requested: Arc::clone(&requested),
+            seen: Rc::clone(&seen),
+            inner: inner.clone(),
+        };
+
+        let first = force_stop(&requested, &mut port, LineEnding::Lf);
+        let second = force_stop(&requested, &mut port, LineEnding::Lf);
+
+        assert_eq!(
+            first,
+            ForcedStop {
+                first: true,
+                written: true
+            }
+        );
+        assert_eq!(
+            second,
+            ForcedStop {
+                first: false,
+                written: true
+            }
+        );
+        assert!(seen.borrow().iter().all(|requested_then| *requested_then));
+        assert_eq!(inner.text(), "\nd\n\nd\n");
+    }
+
+    #[test]
+    fn force_stop_reports_a_failed_write_but_still_requests_the_stop() {
+        let requested = Arc::new(AtomicBool::new(false));
+        let port = FakePort::default();
+        port.fail_next(1);
+
+        let result = force_stop(&requested, &mut port.clone(), LineEnding::Lf);
+
+        assert_eq!(
+            result,
+            ForcedStop {
+                first: true,
+                written: false
+            }
+        );
+        assert!(requested.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn no_token_is_sent_after_a_forced_stop() {
+        let (port, log) = (FakePort::default(), Lines::default());
+        let (mut s, flag) = session(&port, &log);
+        let side = FakePort::default();
+        let mut calls = 0;
+
+        let outcome = run(
+            &mut s,
+            &args(&["ksit", "kwkF", "khi"]),
+            timing(),
+            &mut |_| {
+                calls += 1;
+                if calls == 2 {
+                    // The watchdog (or the signal handler) fires while waiting after `ksit`.
+                    let _ = force_stop(&flag, &mut side.clone(), LineEnding::Lf);
+                }
+                !flag.load(Ordering::SeqCst)
+            },
+        );
+        drop(s);
+
+        assert_eq!(outcome.unwrap(), Outcome::Interrupted);
+        assert_eq!(port.text(), "ksit\n\nd\n");
+        assert_eq!(side.text(), "\nd\n");
+    }
+
+    #[test]
+    fn stop_sent_flag_is_shared_and_set_by_stop() {
+        let (port, log) = (FakePort::default(), Lines::default());
+        let (mut s, _) = session(&port, &log);
+        let flag = s.stop_sent_flag();
+
+        assert!(!flag.load(Ordering::SeqCst));
+        s.stop().unwrap();
+        assert!(flag.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn signal_actions() {
+        assert_eq!(signal_action(true, true), SignalAction::Continue);
+        assert_eq!(signal_action(true, false), SignalAction::Continue);
+        assert_eq!(signal_action(false, true), SignalAction::Exit);
+        assert_eq!(signal_action(false, false), SignalAction::WaitForMain);
     }
 }
