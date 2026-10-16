@@ -284,17 +284,26 @@ fn report_exit(
     observed: Option<&io::Result<Observed>>,
     outcome: &io::Result<Outcome>,
 ) {
-    match (exit, stopped, observed, outcome) {
-        (Exit::StopFailed, Err(e), _, _) => warn(&format!("{STOP_FAILED} ({})", e.kind())),
-        (Exit::StopRetried, _, Some(Err(e)), _) => warn(&format!(
-            "the first stop attempt failed ({}); the retry sent the stop token",
-            e.kind()
-        )),
-        (Exit::SendFailed, _, _, Err(e)) => {
-            warn(&format!("send failed ({}); stop token sent", e.kind()));
+    match exit {
+        Exit::Success => {}
+        Exit::Interrupted => warn("interrupted; stop token sent"),
+        Exit::SendFailed => {
+            if let Err(e) = outcome {
+                warn(&format!("send failed ({}); stop token sent", e.kind()));
+            }
         }
-        (Exit::Interrupted, ..) => warn("interrupted; stop token sent"),
-        _ => {}
+        Exit::StopRetried => {
+            if let Some(Err(e)) = observed {
+                warn(&format!(
+                    "the first stop attempt failed ({}); the retry sent the stop token",
+                    e.kind()
+                ));
+            }
+        }
+        Exit::StopFailed => match stopped {
+            Err(e) => warn(&format!("{STOP_FAILED} ({})", e.kind())),
+            Ok(()) => warn(STOP_FAILED),
+        },
     }
 }
 
