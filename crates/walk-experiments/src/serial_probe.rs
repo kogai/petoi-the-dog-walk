@@ -22,6 +22,13 @@ const MAX_TOKEN_LEN: usize = 16;
 const MAX_QUESTION_CHARS: usize = 120;
 /// Time to look at the robot after the question is shown, before the stop token is sent.
 pub const LOOK_TIME: Duration = Duration::from_millis(1500);
+/// Pause between the line ending that goes before the stop token and the stop token itself.
+/// The firmware reads the first byte as the token and joins the bytes that follow within its
+/// serial timeout (5 ms) as that token's argument, so `"\nd\n"` in one write is read as the
+/// token `\n` with the argument `d`, not as a stop (inference from the `OpenCat` source,
+/// commit 24563ca, `src/io.h` `read_serial`; it matches the `\n\r\n` reply seen in E00).
+/// With the pause, the line ending is a token of its own and `d` arrives as the next one.
+pub const STOP_GAP: Duration = Duration::from_millis(50);
 /// Extra time after the planned end of a run before the watchdog sends the stop token itself.
 pub const STOP_GRACE: Duration = Duration::from_millis(3000);
 /// Invalid answers accepted before the question is given up as unanswered.
@@ -430,14 +437,20 @@ impl<W: Write, L: Log> Drop for Session<W, L> {
 }
 
 /// Writes the stop token to `port`. A line ending goes first, so that a partly written token
-/// cannot join with it. Writes nothing else, logs nothing and never blocks on the terminal, so it
-/// can be called from a signal handler or a watchdog while the main thread is stuck on output.
+/// cannot join with it, then [`STOP_GAP`] passes so that the firmware does not read the stop token
+/// as part of that line ending. Writes nothing else, logs nothing and never blocks on the
+/// terminal, so it can be called from a signal handler or a watchdog while the main thread is
+/// stuck on output.
 ///
 /// # Errors
 /// The write error.
 pub fn write_stop<W: Write>(port: &mut W, eol: LineEnding) -> io::Result<()> {
     let eol = eol.as_str();
-    port.write_all(format!("{eol}{STOP_TOKEN}{eol}").as_bytes())
+    port.write_all(eol.as_bytes())?;
+    port.flush()?;
+    std::thread::sleep(STOP_GAP);
+    port.write_all(format!("{STOP_TOKEN}{eol}").as_bytes())?;
+    port.flush()
 }
 
 /// Time from the start of a run after which the stop token should already have been sent:
@@ -1766,6 +1779,45 @@ mod tests {
         write_stop(&mut w, LineEnding::CrLf).unwrap();
 
         assert_eq!(port.text(), "\nd\n\r\nd\r\n");
+    }
+
+    /// A port that records each write and flush, with the time it happened.
+    #[derive(Clone, Default)]
+    struct TimedPort {
+        events: Rc<RefCell<Vec<(String, Instant)>>>,
+    }
+
+    impl Write for TimedPort {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            let text = String::from_utf8(buf.to_vec()).unwrap();
+            self.events.borrow_mut().push((text, Instant::now()));
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            self.events
+                .borrow_mut()
+                .push(("<flush>".to_owned(), Instant::now()));
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn stop_token_is_written_apart_from_the_leading_line_ending() {
+        let port = TimedPort::default();
+
+        write_stop(&mut port.clone(), LineEnding::Lf).unwrap();
+
+        let events = port.events.borrow();
+        let texts: Vec<&str> = events.iter().map(|(t, _)| t.as_str()).collect();
+        assert_eq!(texts, ["\n", "<flush>", "d\n", "<flush>"]);
+        assert!(events[2].1.duration_since(events[1].1) >= STOP_GAP);
+    }
+
+    #[test]
+    fn stop_gap_is_longer_than_the_firmware_serial_timeout() {
+        // OpenCat (24563ca) src/OpenCat.h: SERIAL_TIMEOUT 5 ms joins bytes arriving within it.
+        assert!(STOP_GAP >= Duration::from_millis(5) * 4);
     }
 
     #[test]
