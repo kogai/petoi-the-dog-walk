@@ -7,6 +7,11 @@
 //! stop request no further token is sent (except in a microsecond race, followed by `d`). If `d`
 //! cannot be sent, the program says so and exits with status 3.
 //!
+//! Two stop paths do not depend on the main thread or on terminal output, because a terminal
+//! paused with Ctrl-S blocks every write to it: the signal handler writes `d` to a second handle
+//! on the port before anything else, and a watchdog writes `d` if the main thread has not stopped
+//! by the planned end of the run plus `STOP_GRACE` (`serial_probe::stop_deadline`).
+//!
 //! With `E00_ASK`, after the final wait the program rings the bell and shows one yes/no question
 //! about what the robot is doing at that moment, sends `d`, and then reads the answer from the
 //! keyboard into the log (`walk_experiments::serial_probe::observe`).
@@ -15,15 +20,15 @@ use std::cell::Cell;
 use std::fs::File;
 use std::io::{self, Read, Write};
 use std::process::ExitCode;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use walk_experiments::serial_probe::{
-    self, BAUD_RATE, Command, Exit, Input, Log, Observed, Outcome, Probe, Prompt, STOP_FAILED,
-    Session, hide_port, show_bytes,
+    self, BAUD_RATE, Command, Exit, Input, LineEnding, Log, Observed, Outcome, Probe, Prompt,
+    STOP_FAILED, Session, hide_port, show_bytes, write_stop,
 };
 
 /// Read and write timeout on the port, so that a vanished device cannot hang a write.
@@ -69,6 +74,35 @@ fn install_panic_hook() {
             .unwrap_or_else(|| "unknown".to_owned());
         warn(&format!("panic: {message}"));
     }));
+}
+
+/// A second handle on the open port, used to send the stop token without going through the main
+/// thread, which can be stuck writing to the terminal (for example after Ctrl-S). Empty until
+/// the port is open.
+type StopPort = Arc<Mutex<Option<Box<dyn serialport::SerialPort>>>>;
+
+/// Writes the stop token through `port`. Writes nothing to the terminal, so it cannot block on
+/// it. A second `d` after the main thread's one is harmless.
+fn emergency_stop(port: &StopPort, eol: LineEnding) -> bool {
+    let mut guard = port.lock().unwrap_or_else(PoisonError::into_inner);
+    guard.as_mut().is_some_and(|p| write_stop(p, eol).is_ok())
+}
+
+/// Sends the stop token itself if the main thread has not finished stopping by `deadline` after
+/// the start. Logs nothing, for the same reason as [`emergency_stop`].
+fn spawn_watchdog(port: StopPort, eol: LineEnding, deadline: Duration, state: Arc<AtomicU8>) {
+    let start = Instant::now();
+    thread::spawn(move || {
+        while start.elapsed() < deadline {
+            if state.load(Ordering::SeqCst) == STOP_DONE {
+                return;
+            }
+            thread::sleep(TICK);
+        }
+        if state.load(Ordering::SeqCst) != STOP_DONE {
+            let _ = emergency_stop(&port, eol);
+        }
+    });
 }
 
 /// Sleeps for `total`, returning early (with `false`) if a stop was requested.
@@ -176,15 +210,27 @@ fn open_log(path: Option<&str>) -> io::Result<Option<File>> {
     .transpose()
 }
 
-fn probe(probe: &Probe) -> ExitCode {
-    let stop = Arc::new(AtomicBool::new(false));
-    let state = Arc::new(AtomicU8::new(STOP_PENDING));
-    let (handler_stop, handler_state) = (Arc::clone(&stop), Arc::clone(&state));
-    let handler = ctrlc::set_handler(move || {
+/// Installs the Ctrl-C / SIGTERM / SIGHUP handler: the first signal sends `d` and asks the main
+/// thread to stop; a second one ends the program.
+fn install_stop_handler(
+    stop: &Arc<AtomicBool>,
+    state: &Arc<AtomicU8>,
+    stop_port: &StopPort,
+    eol: LineEnding,
+) -> Result<(), ctrlc::Error> {
+    let (handler_stop, handler_state) = (Arc::clone(stop), Arc::clone(state));
+    let (handler_port, eol) = (Arc::clone(stop_port), eol);
+    ctrlc::set_handler(move || {
+        // Every signal sends `d` here first, before any terminal output, so that a main thread
+        // stuck on output cannot delay it. The main thread sends it again when it stops.
+        let sent = emergency_stop(&handler_port, eol);
         if !handler_stop.swap(true, Ordering::SeqCst) {
-            return; // first signal: the main thread stops and sends `d`
+            return; // first signal: the main thread also stops and sends `d`
         }
-        // Second signal: wait for the stop attempt to finish before deciding.
+        if sent {
+            std::process::exit(130);
+        }
+        // Second signal and `d` could not be written here: wait for the main thread's attempt.
         let deadline = Instant::now() + IO_TIMEOUT * 3;
         while handler_state.load(Ordering::SeqCst) == STOP_PENDING && Instant::now() < deadline {
             thread::sleep(TICK);
@@ -193,7 +239,14 @@ fn probe(probe: &Probe) -> ExitCode {
             warn(STOP_FAILED);
         }
         std::process::exit(130);
-    });
+    })
+}
+
+fn probe(probe: &Probe) -> ExitCode {
+    let stop = Arc::new(AtomicBool::new(false));
+    let state = Arc::new(AtomicU8::new(STOP_PENDING));
+    let stop_port: StopPort = Arc::new(Mutex::new(None));
+    let handler = install_stop_handler(&stop, &state, &stop_port, probe.eol);
     if let Err(e) = handler {
         warn(&format!(
             "cannot install the Ctrl-C handler, refusing to run: {e}"
@@ -227,6 +280,23 @@ fn probe(probe: &Probe) -> ExitCode {
         }
     };
     let start = Instant::now();
+    match port.try_clone() {
+        Ok(clone) => {
+            *stop_port.lock().unwrap_or_else(PoisonError::into_inner) = Some(clone);
+            let deadline =
+                serial_probe::stop_deadline(probe.timing, probe.tokens.len(), probe.ask.is_some());
+            spawn_watchdog(
+                Arc::clone(&stop_port),
+                probe.eol,
+                deadline,
+                Arc::clone(&state),
+            );
+        }
+        Err(e) => warn(&format!(
+            "no independent stop path (Ctrl-C and the watchdog cannot send d): {}",
+            hide_port(&e.to_string(), &probe.port)
+        )),
+    }
     match port.try_clone() {
         Ok(reader) => spawn_reader(reader, start, TerminalLog { file: reader_file }),
         Err(e) => warn(&format!(

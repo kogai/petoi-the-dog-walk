@@ -22,6 +22,8 @@ const MAX_TOKEN_LEN: usize = 16;
 const MAX_QUESTION_CHARS: usize = 120;
 /// Time to look at the robot after the question is shown, before the stop token is sent.
 pub const LOOK_TIME: Duration = Duration::from_millis(1500);
+/// Extra time after the planned end of a run before the watchdog sends the stop token itself.
+pub const STOP_GRACE: Duration = Duration::from_millis(3000);
 /// Invalid answers accepted before the question is given up as unanswered.
 const MAX_ANSWER_ATTEMPTS: usize = 5;
 
@@ -346,9 +348,7 @@ impl<W: Write, L: Log> Session<W, L> {
         if self.stop_sent {
             return Ok(());
         }
-        let eol = self.eol.as_str();
-        self.port
-            .write_all(format!("{eol}{STOP_TOKEN}{eol}").as_bytes())?;
+        write_stop(&mut self.port, self.eol)?;
         self.stop_sent = true;
         self.note(&format!("-> {STOP_TOKEN:?}"));
         Ok(())
@@ -368,6 +368,40 @@ impl<W: Write, L: Log> Drop for Session<W, L> {
             self.log.line(&line);
         }
     }
+}
+
+/// Writes the stop token to `port`. A line ending goes first, so that a partly written token
+/// cannot join with it. Writes nothing else, logs nothing and never blocks on the terminal, so it
+/// can be called from a signal handler or a watchdog while the main thread is stuck on output.
+///
+/// # Errors
+/// The write error.
+pub fn write_stop<W: Write>(port: &mut W, eol: LineEnding) -> io::Result<()> {
+    let eol = eol.as_str();
+    port.write_all(format!("{eol}{STOP_TOKEN}{eol}").as_bytes())
+}
+
+/// Time from the start of a run after which the stop token should already have been sent:
+/// the settle time, every wait, the look time if a question is asked, and [`STOP_GRACE`].
+/// A watchdog sends the stop token itself when this passes, so a main thread stuck on terminal
+/// output (for example after Ctrl-S) cannot leave the robot moving.
+#[must_use]
+pub fn stop_deadline(timing: Timing, tokens: usize, ask: bool) -> Duration {
+    let between = u32::try_from(tokens.saturating_sub(1)).unwrap_or(u32::MAX);
+    let waits = if tokens == 0 {
+        Duration::ZERO
+    } else {
+        timing
+            .wait
+            .saturating_mul(between)
+            .saturating_add(timing.final_wait)
+    };
+    let look = if ask { LOOK_TIME } else { Duration::ZERO };
+    timing
+        .settle
+        .saturating_add(waits)
+        .saturating_add(look)
+        .saturating_add(STOP_GRACE)
 }
 
 /// How [`run`] ended.
@@ -1242,5 +1276,65 @@ mod tests {
         assert!(result.is_err());
         assert!(!read);
         assert_eq!(port.text(), "\nd\n");
+    }
+    // ---- stop independent of the main thread ----
+
+    #[test]
+    fn stop_bytes_start_with_a_line_ending() {
+        let port = FakePort::default();
+        let mut w = port.clone();
+
+        write_stop(&mut w, LineEnding::Lf).unwrap();
+        write_stop(&mut w, LineEnding::CrLf).unwrap();
+
+        assert_eq!(port.text(), "\nd\n\r\nd\r\n");
+    }
+
+    #[test]
+    fn session_stop_writes_the_same_bytes_as_write_stop() {
+        let (port, log) = (FakePort::default(), Lines::default());
+        let (mut s, _) = session(&port, &log);
+        let other = FakePort::default();
+
+        s.stop().unwrap();
+        write_stop(&mut other.clone(), LineEnding::Lf).unwrap();
+
+        assert_eq!(port.text(), other.text());
+    }
+
+    #[test]
+    fn deadline_covers_every_wait_plus_grace() {
+        let timing = Timing {
+            settle: Duration::from_millis(8000),
+            wait: Duration::from_millis(3000),
+            final_wait: Duration::from_millis(5000),
+        };
+
+        assert_eq!(
+            stop_deadline(timing, 1, false),
+            Duration::from_millis(8000 + 5000) + STOP_GRACE
+        );
+        assert_eq!(
+            stop_deadline(timing, 3, false),
+            Duration::from_millis(8000 + 3000 * 2 + 5000) + STOP_GRACE
+        );
+        assert_eq!(
+            stop_deadline(timing, 3, true),
+            Duration::from_millis(8000 + 3000 * 2 + 5000) + LOOK_TIME + STOP_GRACE
+        );
+    }
+
+    #[test]
+    fn deadline_with_no_tokens_is_settle_plus_grace() {
+        let timing = Timing {
+            settle: Duration::from_millis(2000),
+            wait: Duration::from_millis(3000),
+            final_wait: Duration::from_millis(3000),
+        };
+
+        assert_eq!(
+            stop_deadline(timing, 0, false),
+            Duration::from_millis(2000) + STOP_GRACE
+        );
     }
 }
