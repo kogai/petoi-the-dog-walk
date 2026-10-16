@@ -12,7 +12,7 @@ Mac から Bittle へシリアル経由でトークンを送ったとき、Bittl
 結果で、`SerialTransport`・`FakeTransport` の振る舞い（[06-transport.md](../docs/design/06-transport.md) 2節）と、
 `serialport` クレートを Mac で使えるか（[D-09](../docs/design/decisions.md)）が決まる。
 
-2026-10-16 の実施で、A-1〜A-3・A-7・A-8 の判定は済んだ（「結果」節）。**今回お願いするのは A-4・A-5・A-6 だけ。**
+2026-10-16 の実施で、A-1〜A-3・A-7・A-8 の判定は済んだ（「結果」節）。A-4・A-5・A-6 は、書き直したこの手順書で同じ日に実施した（2つ目の「結果」節）。
 
 この手順書で確かめないこと:
 
@@ -485,7 +485,7 @@ $ E00_EOL=CRLF E00_LOG=experimentals/raw/e00-a8.txt ./target/release/e00-serial-
 | 経路 | Wi-Fi 経路を実施しなかった | `HttpTransport` の成否の判定方法は未決定のまま |
 | 連続送信（A-5）・歩行（A-6） | 判定しない（ルールで外した。A-6 は電池の電圧が低い状態でもあった） | 書き直した手順書で再実施する |
 
-「（全体）手順どおりに進まなかった」に当たるのは、A-5（変形版で行った）・A-6・B。そこは書き直した手順で再依頼する。A-3・A-4・A-7・A-8 の出力による判定は有効とする。一部だけ実施したので、状態は「依頼中」のままにする。
+「（全体）手順どおりに進まなかった」に当たるのは、A-5（変形版で行った）・A-6・B。そこは書き直した手順で再依頼する。A-3・A-4・A-7・A-8 の出力による判定は有効とする。一部だけ実施したので、状態は「依頼中」のままにする（その後、2つ目の「結果」節の実施で「実施済み」にした）。
 
 ### 気づいたこと
 
@@ -512,11 +512,12 @@ $ E00_EOL=CRLF E00_LOG=experimentals/raw/e00-a8.txt ./target/release/e00-serial-
 
 ### 出力（書き直した手順での実施）
 
-実施者が会話に貼った出力を、エージェントが転記した。ポート名は `<PORT>` に伏せてある。ターミナルにだけ出る英文の警告（`the watchdog sent the stop token`、`!! STOP TOKEN NOT SENT` など）は、どの回にも無かった。
+実施者が会話に貼ったコマンドと出力を、エージェントが転記した。ポート名は `<PORT>` に伏せてある。ターミナルにだけ出る英文の警告（`the watchdog sent the stop token`、`!! STOP TOKEN NOT SENT` など）は、どの回にも無かった。
 
 #### P-6（1回目）
 
 ```
+$ E00_LOG=experimentals/raw/e00-p6.txt ./target/release/e00-serial-probe <PORT> kbalance
   1436.4 ms  <- "\x00"
   1501.5 ms  <- "k\r\n\n* Start *\r\nBittle\r\nN_260806\r"
   1503.6 ms  <- "\n"
@@ -536,6 +537,7 @@ $ E00_EOL=CRLF E00_LOG=experimentals/raw/e00-a8.txt ./target/release/e00-serial-
 #### A-4 ksit
 
 ```
+$ E00_FINAL_WAIT_MS=10000 E00_LOG=experimentals/raw/e00-a4-ksit.txt ./target/release/e00-serial-probe <PORT> ksit
   1443.9 ms  <- "\x00"
   1509.0 ms  <- "k\r\n\n* Start *\r\nBittle\r\nN_260806\r"
   1511.0 ms  <- "\n"
@@ -555,6 +557,7 @@ $ E00_EOL=CRLF E00_LOG=experimentals/raw/e00-a8.txt ./target/release/e00-serial-
 #### A-4 kbalance 1回目（使わなかった回: `* Start *` が2回。起動の途中で再起動した。`Low power` は出ていない）
 
 ```
+$ E00_FINAL_WAIT_MS=10000 E00_LOG=experimentals/raw/e00-a4-kbalance.txt ./target/release/e00-serial-probe <PORT> kbalance
   1444.7 ms  <- "\x00"
   1510.1 ms  <- "k\r\n\n* Start *\r\nBittle\r\nN_260806\r"
   1512.2 ms  <- "\n"
@@ -576,6 +579,7 @@ $ E00_EOL=CRLF E00_LOG=experimentals/raw/e00-a8.txt ./target/release/e00-serial-
 #### P-6 2回目（`-r2`）
 
 ```
+$ E00_LOG=experimentals/raw/e00-p6-r2.txt ./target/release/e00-serial-probe <PORT> kbalance
   1446.2 ms  <- "\x00"
   1511.5 ms  <- "k\r\n\n* Start *\r\nBittle\r\nN_260806\r"
   1513.5 ms  <- "\n"
@@ -595,6 +599,7 @@ $ E00_EOL=CRLF E00_LOG=experimentals/raw/e00-a8.txt ./target/release/e00-serial-
 #### A-4 kbalance 2回目（`-r2`）
 
 ```
+$ E00_FINAL_WAIT_MS=10000 E00_LOG=experimentals/raw/e00-a4-kbalance-r2.txt ./target/release/e00-serial-probe <PORT> kbalance
   1443.7 ms  <- "\x00"
   1509.9 ms  <- "k\r\n\n* Start *\r\nBittle\r\nN_260806\r"
   1511.5 ms  <- "\n"
@@ -614,6 +619,7 @@ $ E00_EOL=CRLF E00_LOG=experimentals/raw/e00-a8.txt ./target/release/e00-serial-
 #### A-4 kwkF
 
 ```
+$ E00_FINAL_WAIT_MS=10000 E00_LOG=experimentals/raw/e00-a4-kwkF.txt ./target/release/e00-serial-probe <PORT> kwkF
   1445.9 ms  <- "\x00"
   1511.2 ms  <- "k\r\n\n* Start *\r\nBittle\r\nN_260806\r"
   1513.2 ms  <- "\n"
@@ -633,6 +639,7 @@ $ E00_EOL=CRLF E00_LOG=experimentals/raw/e00-a8.txt ./target/release/e00-serial-
 #### A-4 khi 1回目
 
 ```
+$ E00_FINAL_WAIT_MS=10000 E00_LOG=experimentals/raw/e00-a4-khi-1.txt ./target/release/e00-serial-probe <PORT> khi
   1443.5 ms  <- "\x00"
   1508.8 ms  <- "k\r\n\n* Start *\r\nBittle\r\nN_260806\r"
   1510.8 ms  <- "\n"
@@ -652,6 +659,7 @@ $ E00_EOL=CRLF E00_LOG=experimentals/raw/e00-a8.txt ./target/release/e00-serial-
 #### A-4 khi 2回目
 
 ```
+$ E00_FINAL_WAIT_MS=10000 E00_LOG=experimentals/raw/e00-a4-khi-2.txt ./target/release/e00-serial-probe <PORT> khi
   1443.9 ms  <- "\x00"
   1509.4 ms  <- "k\r\n\n* Start *\r\nBittle\r\nN_260806\r"
   1511.2 ms  <- "\n"
@@ -671,6 +679,7 @@ $ E00_EOL=CRLF E00_LOG=experimentals/raw/e00-a8.txt ./target/release/e00-serial-
 #### A-4 khi 3回目
 
 ```
+$ E00_FINAL_WAIT_MS=10000 E00_LOG=experimentals/raw/e00-a4-khi-3.txt ./target/release/e00-serial-probe <PORT> khi
   1446.6 ms  <- "\x00"
   1512.0 ms  <- "k\r\n\n* Start *\r\nBittle\r\nN_260806\r"
   1514.0 ms  <- "\n"
@@ -690,6 +699,7 @@ $ E00_EOL=CRLF E00_LOG=experimentals/raw/e00-a8.txt ./target/release/e00-serial-
 #### A-5
 
 ```
+$ E00_WAIT_MS=2000 E00_FINAL_WAIT_MS=10000 E00_LOG=experimentals/raw/e00-a5.txt ./target/release/e00-serial-probe <PORT> khi khi
   1441.4 ms  <- "\x00"
   1507.0 ms  <- "k\r\n\n* Start *\r\nBittle\r\nN_260806\r"
   1508.9 ms  <- "\n"
@@ -710,6 +720,7 @@ $ E00_EOL=CRLF E00_LOG=experimentals/raw/e00-a8.txt ./target/release/e00-serial-
 #### A-6
 
 ```
+$ E00_FINAL_WAIT_MS=5000 E00_ASK='前脚付近のサーボは、今動いていますか？' E00_LOG=experimentals/raw/e00-a6.txt ./target/release/e00-serial-probe <PORT> kwkF
   1446.4 ms  <- "\x00"
   1511.8 ms  <- "k\r\n\n* Start *\r\nBittle\r\nN_260806\r"
   1513.6 ms  <- "\n"
@@ -751,13 +762,13 @@ n
 | 応答（A-4） | 6回すべてで `k` が返り、`kwkF` の `k` は 375 ms（1 秒以内）、`khi` の `k` は3回とも約 5.5 秒（2 秒以上）。判定基準の1行目に当たる | `k` は「動作を終えた（歩行は受け付けた）」しるしと読める。`SerialTransport::send` は `k` を待って成否を判定できる。待つ時間の上限は、A-4 の値をもとにトークンごとに決める（反映の PR で決める） |
 | 連続送信（A-5） | `k` は1つだけ（16609.2 ms）。1回目の送信（8005.2 ms）から 8604 ms、2回目の送信（10011.8 ms）から 6597 ms。どちらも `khi` の範囲（5186〜5806 ms）に入らない。判定基準の「分からなかった」の行に当たる | 分からなかった。安全側に倒し、同じトークンの連続送信を抑止する |
 | 歩行（A-6） | `answer: no`（5 秒後には、前脚付近のサーボは動いていなかった） | 歩行中は一定間隔で再送する設計に変える。ただし脚を付けていない状態での結果で、脚を付けたときも同じかは**未確認** |
-| 道具 | P-2〜P-6 と A-4〜A-6 で、ビルドでき、実機で動いた。`E00_ASK` の問い（日本語）も表示され、答えがログに残った | `SerialTransport` は `serialport` クレートで書く（2026-10-16 の判定どおり） |
+| 道具 | P-4〜P-6 と A-4〜A-6 で、道具が実機で動いた（P-2 の `Finished` の出力は貼られていないが、動いたのでビルドはできたと読める）。`E00_ASK` の問い（日本語）も表示され、答えがログに残った | `SerialTransport` は `serialport` クレートで書く（2026-10-16 の判定どおり） |
 
 A-4・A-5・A-6 はすべて判定できたので、状態を「実施済み」にする。Wi-Fi 経路、`d` で止まるか、送信間隔の下限は、この手順書では確かめない（「目的」節）。
 
 ### 気づいたこと（書き直した手順での実施）
 
 - A-4 kbalance 1回目は、`Low power` が出ていないのに、起動の途中（`IMU` の行の約 3.9 秒後）で再起動した。前回の再起動と同じ時点。原因は**未確認**。
-- A-5 では、2回目の `khi` に `G` が返っていない（1回目の後にだけ `G` がある）。`k` は、`khi` 1回分（約 5.5 秒）より約 1 秒遅く返った。2回目がどう扱われたかは、この出力からは決められない（推測しない）。
+- A-5 では、2回目の `khi` に `G` が返っていない（1回目の後にだけ `G` がある）。`k` は、2回目の送信から数えると、`khi` 1回分（約 5.5 秒）より約 1.1 秒遅く返った（1回目から数えると約 3.1 秒遅い）。2回目がどう扱われたかは、この出力からは決められない（推測しない）。
 - A-6 の `k`（357 ms）と A-4 の `kwkF`（375 ms）は近い。
-- `kwkF` の `k` が返った後、5 秒後には動いていなかった。止まった時刻は、この手順では分からない。
+- `kwkF` の送信から 5 秒後（問いが出た時点）には動いていなかった。止まった時刻は、この手順では分からない。
