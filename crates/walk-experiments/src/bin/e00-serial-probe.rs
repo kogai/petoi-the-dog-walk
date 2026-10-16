@@ -17,7 +17,8 @@
 //!
 //! With `E00_ASK`, after the final wait the program rings the bell and shows one yes/no question
 //! about what the robot is doing at that moment, sends `d`, and then reads the answer from the
-//! keyboard into the log (`walk_experiments::serial_probe::observe`).
+//! keyboard into the log (`walk_experiments::serial_probe::observe`). With `E00_ASK_AFTER_STOP_MS`
+//! as well, it sends `d` first, asks that long after it, and sends `d` again after the look (E13).
 
 use std::cell::Cell;
 use std::fs::File;
@@ -376,6 +377,7 @@ fn probe(probe: &Probe) -> ExitCode {
             Some(serial_probe::observe(
                 &mut session,
                 question,
+                probe.ask_at,
                 &mut |d| sleep_unless_stopped(d, &stop),
                 &mut |prompt| {
                     if matches!(prompt, Prompt::LookNow(_)) {

@@ -73,6 +73,17 @@ pub struct Probe {
     pub log_path: Option<String>,
     /// One yes/no question for the person watching, asked after the final wait (`E00_ASK`).
     pub ask: Option<String>,
+    /// When the question is asked relative to the stop token (`E00_ASK_AFTER_STOP_MS`).
+    pub ask_at: AskAt,
+}
+
+/// When [`observe`] asks its question, relative to the stop token.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AskAt {
+    /// While the robot is still moving; the stop token follows the look (the default).
+    BeforeStop,
+    /// This long after the stop token, to see whether the robot stopped (E13).
+    AfterStop(Duration),
 }
 
 /// What the binary should do.
@@ -113,6 +124,8 @@ pub enum ConfigError {
     BadLineEnding(String),
     /// `E00_ASK` that is too long or contains control characters.
     BadQuestion,
+    /// `E00_ASK_AFTER_STOP_MS` without `E00_ASK`.
+    AfterStopWithoutQuestion,
 }
 
 impl fmt::Display for ConfigError {
@@ -139,6 +152,9 @@ impl fmt::Display for ConfigError {
                 f,
                 "E00_ASK: use at most {MAX_QUESTION_CHARS} characters and no control characters"
             ),
+            Self::AfterStopWithoutQuestion => f.write_str(
+                "E00_ASK_AFTER_STOP_MS needs E00_ASK (the question to ask after the stop)",
+            ),
         }
     }
 }
@@ -148,7 +164,9 @@ pub const USAGE: &str = "usage: e00-serial-probe <PORT> <TOKEN>...\n       e00-s
 env: E00_WAIT_MS (100..=10000, default 3000), E00_FINAL_WAIT_MS (100..=10000, default E00_WAIT_MS),\n     \
 E00_SETTLE_MS (0..=10000, default 2000), E00_EOL (LF or CRLF, default LF), E00_LOG (log file),\n     \
 E00_ASK (a yes/no question shown with a bell after the final wait; the robot keeps moving\n     \
-1.5 s longer to be looked at, then the stop token is sent and the answer is typed)";
+1.5 s longer to be looked at, then the stop token is sent and the answer is typed),\n     \
+E00_ASK_AFTER_STOP_MS (0..=10000; with E00_ASK, send the stop token first, ask this long after it,\n     \
+and send the stop token again after the 1.5 s look)";
 
 fn millis(
     env: &impl Fn(&str) -> Option<String>,
@@ -233,6 +251,16 @@ pub fn parse(
                 Some(_) => return Err(ConfigError::BadQuestion),
                 None => None,
             };
+            let ask_at = match env("E00_ASK_AFTER_STOP_MS") {
+                None => AskAt::BeforeStop,
+                Some(_) if ask.is_none() => return Err(ConfigError::AfterStopWithoutQuestion),
+                Some(_) => AskAt::AfterStop(Duration::from_millis(millis(
+                    &env,
+                    "E00_ASK_AFTER_STOP_MS",
+                    0,
+                    (0, 10_000),
+                )?)),
+            };
             Ok(Command::Probe(Probe {
                 port: port.clone(),
                 tokens: tokens.to_vec(),
@@ -240,6 +268,7 @@ pub fn parse(
                 eol,
                 log_path,
                 ask,
+                ask_at,
             }))
         }
         _ => Err(ConfigError::Usage),
@@ -348,6 +377,19 @@ impl<W: Write, L: Log> Session<W, L> {
         if self.stop_sent.load(Ordering::SeqCst) {
             return Ok(());
         }
+        write_stop(&mut self.port, self.eol)?;
+        self.stop_sent.store(true, Ordering::SeqCst);
+        self.note(&format!("-> {STOP_TOKEN:?}"));
+        Ok(())
+    }
+
+    /// Sends the stop token again, even if it was already sent. Used after looking at a robot
+    /// that should already have stopped, so that it is not left moving if the first one did not
+    /// work. The port is written before anything is logged.
+    ///
+    /// # Errors
+    /// The write error.
+    pub fn stop_again(&mut self) -> io::Result<()> {
         write_stop(&mut self.port, self.eol)?;
         self.stop_sent.store(true, Ordering::SeqCst);
         self.note(&format!("-> {STOP_TOKEN:?}"));
@@ -660,22 +702,43 @@ pub enum Observed {
 
 /// Asks one question about what the robot is doing *now*, so that the person watching has to
 /// remember nothing: logs and shows the question (`show` also rings the bell), gives
-/// [`LOOK_TIME`] to look, sends the stop token, and only then reads the answer, so the robot is
-/// not left moving while the person types.
+/// [`LOOK_TIME`] to look, and only then reads the answer, so the robot is not left moving while
+/// the person types.
+///
+/// With [`AskAt::BeforeStop`] the stop token is sent after the look. With
+/// [`AskAt::AfterStop`] it is sent first, the question comes the given time later, and the stop
+/// token is sent again after the look.
 ///
 /// # Errors
-/// The stop token's write error; no answer is read then.
+/// A stop token's write error; no answer is read then.
 pub fn observe<W: Write, L: Log>(
     session: &mut Session<W, L>,
     question: &str,
+    ask_at: AskAt,
     sleep: &mut dyn FnMut(Duration) -> bool,
     show: &mut dyn FnMut(Prompt<'_>),
     read_line: &mut dyn FnMut() -> Input,
 ) -> io::Result<Observed> {
-    session.note(&format!("?? {question}"));
-    show(Prompt::LookNow(question));
-    let looked = sleep(LOOK_TIME);
-    session.stop()?;
+    let looked = match ask_at {
+        AskAt::BeforeStop => {
+            session.note(&format!("?? {question}"));
+            show(Prompt::LookNow(question));
+            let looked = sleep(LOOK_TIME);
+            session.stop()?;
+            looked
+        }
+        AskAt::AfterStop(delay) => {
+            session.stop()?;
+            if !sleep(delay) {
+                return Ok(Observed::Interrupted);
+            }
+            session.note(&format!("?? {question}"));
+            show(Prompt::LookNow(question));
+            let looked = sleep(LOOK_TIME);
+            session.stop_again()?;
+            looked
+        }
+    };
     if !looked {
         return Ok(Observed::Interrupted);
     }
@@ -1247,6 +1310,7 @@ mod tests {
     fn observe_with(
         answers: &[&str],
         look_ok: bool,
+        ask_at: AskAt,
     ) -> (io::Result<Observed>, FakePort, Lines, Vec<String>) {
         let (port, log) = (FakePort::default(), Lines::default());
         let (mut s, _) = session(&port, &log);
@@ -1260,12 +1324,17 @@ mod tests {
             })
             .collect();
         let (e1, e2, e3) = (Rc::clone(&events), Rc::clone(&events), Rc::clone(&events));
-        let port_seen = port.clone();
+        let (port_seen, port_at_sleep) = (port.clone(), port.clone());
         let result = observe(
             &mut s,
             "moving?",
+            ask_at,
             &mut |d| {
-                e1.borrow_mut().push(format!("sleep {}", d.as_millis()));
+                e1.borrow_mut().push(format!(
+                    "sleep {} (port: {:?})",
+                    d.as_millis(),
+                    port_at_sleep.text()
+                ));
                 look_ok
             },
             &mut |prompt| e2.borrow_mut().push(format!("show {prompt:?}")),
@@ -1282,11 +1351,14 @@ mod tests {
 
     #[test]
     fn question_is_shown_then_robot_is_stopped_before_the_answer_is_read() {
-        let (result, port, log, events) = observe_with(&["y"], true);
+        let (result, port, log, events) = observe_with(&["y"], true, AskAt::BeforeStop);
 
         assert_eq!(result.unwrap(), Observed::Answered(Answer::Yes));
         assert!(events.first().is_some_and(|e| e.starts_with("show ")));
-        assert_eq!(events.get(1).map(String::as_str), Some("sleep 1500"));
+        assert_eq!(
+            events.get(1).map(String::as_str),
+            Some("sleep 1500 (port: \"\")")
+        );
         // The stop token was already on the port when the answer was read.
         assert!(events.iter().any(|e| e == "read (port: \"\\nd\\n\")"));
         assert_eq!(port.text(), "\nd\n");
@@ -1297,7 +1369,7 @@ mod tests {
 
     #[test]
     fn invalid_answers_are_asked_again() {
-        let (result, _, log, _) = observe_with(&["maybe", "", "n"], true);
+        let (result, _, log, _) = observe_with(&["maybe", "", "n"], true, AskAt::BeforeStop);
 
         assert_eq!(result.unwrap(), Observed::Answered(Answer::No));
         assert!(log.0.borrow().iter().any(|l| l.ends_with("answer: no")));
@@ -1305,7 +1377,7 @@ mod tests {
 
     #[test]
     fn end_of_input_records_no_answer() {
-        let (result, port, log, _) = observe_with(&[], true);
+        let (result, port, log, _) = observe_with(&[], true, AskAt::BeforeStop);
 
         assert_eq!(result.unwrap(), Observed::NoAnswer);
         assert_eq!(port.text(), "\nd\n");
@@ -1316,7 +1388,7 @@ mod tests {
     fn too_many_invalid_answers_record_no_answer() {
         let mut script = vec!["x"; MAX_ANSWER_ATTEMPTS];
         script.push("y");
-        let (result, _, log, events) = observe_with(&script, true);
+        let (result, _, log, events) = observe_with(&script, true, AskAt::BeforeStop);
 
         assert_eq!(result.unwrap(), Observed::NoAnswer);
         let reads = events.iter().filter(|e| e.starts_with("read ")).count();
@@ -1328,14 +1400,14 @@ mod tests {
     fn last_allowed_attempt_is_still_accepted() {
         let mut script = vec!["x"; MAX_ANSWER_ATTEMPTS - 1];
         script.push("y");
-        let (result, _, _, _) = observe_with(&script, true);
+        let (result, _, _, _) = observe_with(&script, true, AskAt::BeforeStop);
 
         assert_eq!(result.unwrap(), Observed::Answered(Answer::Yes));
     }
 
     #[test]
     fn stop_while_waiting_for_the_answer_is_an_interruption() {
-        let (result, port, log, _) = observe_with(&[STOPPED], true);
+        let (result, port, log, _) = observe_with(&[STOPPED], true, AskAt::BeforeStop);
 
         assert_eq!(result.unwrap(), Observed::Interrupted);
         assert_eq!(port.text(), "\nd\n");
@@ -1399,7 +1471,7 @@ mod tests {
 
     #[test]
     fn interrupt_while_looking_stops_and_asks_nothing() {
-        let (result, port, _, events) = observe_with(&["y"], false);
+        let (result, port, _, events) = observe_with(&["y"], false, AskAt::BeforeStop);
 
         assert_eq!(result.unwrap(), Observed::Interrupted);
         assert_eq!(port.text(), "\nd\n");
@@ -1413,16 +1485,131 @@ mod tests {
         port.fail_next(1);
         let mut read = false;
 
-        let result = observe(&mut s, "moving?", &mut |_| true, &mut |_| {}, &mut || {
-            read = true;
-            Input::End
-        });
+        let result = observe(
+            &mut s,
+            "moving?",
+            AskAt::BeforeStop,
+            &mut |_| true,
+            &mut |_| {},
+            &mut || {
+                read = true;
+                Input::End
+            },
+        );
         drop(s); // retries the stop
 
         assert!(result.is_err());
         assert!(!read);
         assert_eq!(port.text(), "\nd\n");
     }
+    // ---- asking after the stop (E13) ----
+
+    #[test]
+    fn question_is_asked_before_the_stop_by_default() {
+        let p = probe(&["PORT", "kwkF"], &[("E00_ASK", "moving?")]);
+
+        assert_eq!(p.ask_at, AskAt::BeforeStop);
+    }
+
+    #[test]
+    fn ask_after_stop_is_read() {
+        let p = probe(
+            &["PORT", "kwkF"],
+            &[("E00_ASK", "moving?"), ("E00_ASK_AFTER_STOP_MS", "2000")],
+        );
+
+        assert_eq!(p.ask_at, AskAt::AfterStop(Duration::from_millis(2000)));
+    }
+
+    #[test]
+    fn ask_after_stop_without_a_question_is_rejected() {
+        let result = parse(
+            &args(&["PORT", "kwkF"]),
+            env_of(&[("E00_ASK_AFTER_STOP_MS", "1000")]),
+        );
+
+        assert_eq!(result, Err(ConfigError::AfterStopWithoutQuestion));
+    }
+
+    #[test]
+    fn ask_after_stop_range_is_checked() {
+        let result = parse(
+            &args(&["PORT", "kwkF"]),
+            env_of(&[("E00_ASK", "moving?"), ("E00_ASK_AFTER_STOP_MS", "10001")]),
+        );
+
+        assert_eq!(
+            result,
+            Err(ConfigError::OutOfRange {
+                name: "E00_ASK_AFTER_STOP_MS",
+                value: 10_001,
+                min: 0,
+                max: 10_000,
+            })
+        );
+    }
+
+    #[test]
+    fn after_stop_the_stop_goes_out_first_and_again_after_looking() {
+        let (result, port, log, events) =
+            observe_with(&["n"], true, AskAt::AfterStop(Duration::from_millis(2000)));
+
+        assert_eq!(result.unwrap(), Observed::Answered(Answer::No));
+        // The stop token is on the port before the wait and before the question.
+        assert_eq!(
+            events.first().map(String::as_str),
+            Some("sleep 2000 (port: \"\\nd\\n\")")
+        );
+        assert!(events.get(1).is_some_and(|e| e.starts_with("show LookNow")));
+        assert_eq!(
+            events.get(2).map(String::as_str),
+            Some("sleep 1500 (port: \"\\nd\\n\")")
+        );
+        // A second stop goes out after looking, before the answer is read.
+        assert!(
+            events
+                .iter()
+                .any(|e| e == "read (port: \"\\nd\\n\\nd\\n\")")
+        );
+        assert_eq!(port.text(), "\nd\n\nd\n");
+        let lines = log.0.borrow();
+        assert!(lines.iter().any(|l| l.ends_with("?? moving?")));
+        assert!(lines.iter().any(|l| l.ends_with("answer: no")));
+    }
+
+    #[test]
+    fn interrupt_during_the_wait_after_stop_asks_nothing() {
+        let (result, port, _, events) =
+            observe_with(&["y"], false, AskAt::AfterStop(Duration::from_millis(2000)));
+
+        assert_eq!(result.unwrap(), Observed::Interrupted);
+        assert_eq!(port.text(), "\nd\n");
+        assert!(!events.iter().any(|e| e.starts_with("show ")));
+        assert!(!events.iter().any(|e| e.starts_with("read ")));
+    }
+
+    #[test]
+    fn failed_first_stop_after_stop_asks_nothing() {
+        let (port, log) = (FakePort::default(), Lines::default());
+        let (mut s, _) = session(&port, &log);
+        port.fail_next(1);
+        let mut shown = false;
+
+        let result = observe(
+            &mut s,
+            "moving?",
+            AskAt::AfterStop(Duration::from_millis(2000)),
+            &mut |_| true,
+            &mut |_| shown = true,
+            &mut || Input::End,
+        );
+        drop(s); // retries the stop
+
+        assert!(result.is_err());
+        assert!(!shown);
+        assert_eq!(port.text(), "\nd\n");
+    }
+
     // ---- stop independent of the main thread ----
 
     #[test]
