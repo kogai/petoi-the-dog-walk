@@ -18,12 +18,14 @@
 | F-B5 | Wi-Fi は公式の ESP8266 モジュール（別売の拡張）で使える。公式サンプルは HTTP サーバーで、`http://<IP>/action?name=<動作名>` を受け、シリアルコマンドに変換して NyBoard へ渡す |
 | F-B6 | Python API（PetoiRobot）に `sendSkillStr('ksit', 3)` や `autoConnect()` などがある。立つ姿勢の例は `kup` |
 | F-B8 | 公式の Wi-Fi スケッチ（`ESP8266WiFiController.ino`）の `/action` は、`name` が動作名の表（`actions.h`）にあれば対応するトークンを、**無ければ `name` の文字列をそのまま**シリアルへ送る。応答の本文は、その後 40ms 以内にシリアルから読めた文字列（`text/plain`）。表の `stop` は `d`。ほかに `/calibration?c=<関節>&o=<値>` が `c<関節> <値>` を送る。**実機に書き込まれたスケッチが、このコードと同じかは未確認**（E04） |
+| F-B19 | 公式のファーム（OpenCat）の `read_serial`（`src/io.h`）は、受信バッファの最初の1バイトをトークンとし、続くバイトを、最後に読んだバイトが終端（小文字のトークンなら `\n`、大文字なら `~`）になるか、バイトの来ない時間が `SERIAL_TIMEOUT`（5 ms。`src/OpenCat.h`）を超えるまで、そのトークンの引数として読む。その間は、届いているバイトをまとめて読む。**基板に書き込まれたファームが、このコードと同じかは未確認**（起動の表示の `N_260806` は、このコミットの `SOFTWARE_VERSION` と同じ） |
 
 出典（Petoi 公式ドキュメント）:
 - F-B1〜F-B3: [NyBoard V1_1 & V1_2](https://docs.petoi.com/nyboard/nyboard-v1_1-and-nyboard-v1_2.md)、[Extensible modules: Introduction](https://docs.petoi.com/extensible-modules/introduction.md)
 - F-B4: [Serial Protocol](https://docs.petoi.com/apis/serial-protocol.md)
 - F-B5: [WiFi module ESP8266](https://docs.petoi.com/communication-modules/wifi-esp8266.md)、[ESP8266 + Python Scripts](https://docs.petoi.com/communication-modules/wifi-esp8266/esp8266-+-python-scripts-implement-wireless-crowd-control.md)
 - F-B6: [Python API](https://docs.petoi.com/apis/python-api.md)
+- F-B19: [io.h](https://github.com/PetoiCamp/OpenCat/blob/24563ca2e0218150f6299d013cd3a20c45433467/src/io.h)、[OpenCat.h](https://github.com/PetoiCamp/OpenCat/blob/24563ca2e0218150f6299d013cd3a20c45433467/src/OpenCat.h)（コミット `24563ca` のコードで確認）
 - F-B8: [ESP8266WiFiController.ino](https://github.com/PetoiCamp/OpenCat/blob/24563ca2e0218150f6299d013cd3a20c45433467/ModuleTests/ESP8266WiFiController/ESP8266WiFiController.ino)、[actions.h](https://github.com/PetoiCamp/OpenCat/blob/24563ca2e0218150f6299d013cd3a20c45433467/ModuleTests/ESP8266WiFiController/actions.h)（コミット `24563ca` のコードで確認）
 
 > 事実ごとの出典の対応は、計画書の時点で記録されていなかった。上は文書の範囲から当てたもの。個々の事実を設計の根拠にするときは、該当ページで確かめ直し、この対応を直す。
@@ -38,7 +40,7 @@ E00 の2回の実施による。回数が少ないので、値は目安。
 
 | ID | 事実 | 実施 |
 |---|---|---|
-| F-B9 | Mac がシリアルポートを開くたびに、起動の表示が出る。先頭に `k`、続いて `* Start *`、`Bittle`、`N_260806`、`IMU`、`Servo:`、`Skill`、`Ready!`。`Ready!` はポートを開いてから約 5.5 秒後。その約 0.1〜0.9 秒後に、何も送っていなくても `g` と `d` が出る（`Low power:6V` が続くこともある。途中で再起動したときは出なかった。F-B15）。`Ready!` より前に送ったトークンは崩れることがある（`khi` が `?hi` として返った）。ポートを開くことで再起動しているかは未確認 | 1・2 |
+| F-B9 | Mac がシリアルポートを開くたびに、起動の表示が出る。先頭に `k`、続いて `* Start *`、`Bittle`、`N_260806`、`IMU`、`Servo:`、`Skill`、`Ready!`。`Ready!` はポートを開いてから約 5.5 秒後。その約 0.1〜0.9 秒後に、何も送っていなくても `g` と `d` が出る（`Low power:6V` が続くこともある。途中で再起動したときは出なかった。F-B15）。`Ready!` より前に送ったトークンは崩れることがある（`khi` が `?hi` として返った。F-B18）。ポートを開くことで再起動しているかは未確認 | 1・2 |
 | F-B10 | 起動後の最初の `k` で始まるトークンには、約 30 ms で `G` が返る。続けて送った2つ目の `khi` には `G` は返らなかった。`G` の意味は未確認 | 1・2 |
 | F-B11 | `k` で始まるトークンを送ると、しばらくして `k` が返る。送ってから `k` までの時間（1回の実行で1トークン、LF）: `kwkF` 375 ms、`kbalance` 844 ms、`ksit` 932 ms、`khi` 5486／5506／5503 ms（3回） | 2 |
 | F-B12 | 知らないトークン `kzzz`（LF）には、約 31 ms で `?zzz`（先頭の `k` を除いた名前に `?` を付けたもの）が返り、同じ塊の中で続けて `k` も返った（1回）。改行を CRLF にすると、知っているトークンも 12〜32 ms で `?<名前>\r` と返った。再起動の無かった回では5トークンとも `k` が続き、途中で再起動した回では、どれにも `k` が続かなかった。CRLF で Bittle が動いたかは記録に使っていない（推論: 動作しない） | 1（`Low power:6V` が出ている状態） |
@@ -46,6 +48,8 @@ E00 の2回の実施による。回数が少ないので、値は目安。
 | F-B14 | `kwkF` を1回だけ送ると、送ってから 5 秒後には、前脚付近のサーボは動いていなかった（人が見て答えた。1回のみ）。止まった時刻は測っていない | 2 |
 | F-B15 | `Low power:6V` と表示されることがある（電圧が低いという意味と読める。電圧は測っていない）。起動の途中（`IMU` の行の約 3.9 秒後）で再起動することがある（`* Start *` が2回出る）。再起動が1回だった回（3回）では、`Ready!` はポートを開いてから約 11.4 秒後。再起動が2回あった回（実施1、1回）では、16 秒までに `Ready!` は来なかった。途中で再起動した回では、`Ready!` の後に `g`・`d` は出なかった（どの回も `Ready!` より前にトークンを送っていたので、それが理由かは分からない）。`Low power` の行が無い回でも、再起動が2回あった | 1・2 |
 | F-B16 | `serialport` クレート（`walk-experiments` の `e00-serial-probe`）で、macOS（arm64）の USB シリアルを開き、送受信できた。Bluetooth シリアルは試していない | 2（1 でも動いた） |
+| F-B17 | 道具（`e00-serial-probe`、#27 より前の版）は、停止として改行・`d`・改行を1回の書き込みで送っていた（LF なら `"\nd\n"`。道具のコード `serial_probe.rs` の `write_stop`。実施2はコミット `c940978` の版）。応答が記録された回で返ったのは、LF の回では `\n\r\n`、CRLF の回では `\r\r\n` だけで、`g`・`d` を含む応答は無かった。起動の後にファームが自分で出す `g\r\nd\r\n`（F-B9）とは違う | 1・2 |
+| F-B18 | 起動の途中（`Ready!` の前）に送った `khi` と、その約 3 秒後（`Ready!` の約 0.4 秒前）に送った `kwkF` に対して、`Ready!` の後に `?hi\nkwkF\r\n` が1つだけ返った（1回のみ） | 1 |
 
 出典: E00（[experimentals/E00-connectivity.md](../../experimentals/E00-connectivity.md)）。「実施」の列は、どちらの「結果」節の記録によるか。
 
