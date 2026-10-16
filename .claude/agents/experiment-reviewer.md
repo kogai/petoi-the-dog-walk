@@ -16,6 +16,7 @@ Check each changed experiment file:
 4. Recording: the 記録すること checklist captures raw output, not just a summary, and asks for environment details (firmware version, connection method).
 5. Safety: physical movement steps include precautions and a way to stop; no step asks the human to paste secrets.
 6. Consistency: experimentals/README.md table matches the files (ID, link, status) and the experiment list in docs/design/07-roadmap.md.
+7. Human-feasible (see experimentals/README.md「人が実行できる手順にする」): flag as a blocker any step that asks a person to remember movements while watching (speed, order, count, "did it restart"), to watch Bittle while reading the terminal, to answer more than one observation question in one run, or to observe without a tool prompt at the moment to look. Each observation must be a single yes/no question that also accepts "could not tell", and the 判定基準 must have a row for "could not tell". Prefer judging from tool output and log timestamps.
 
 Also flag, as a blocker, anything that exposes secrets or local-environment details in this public repository (docs/rules/public-repo.md).
 
