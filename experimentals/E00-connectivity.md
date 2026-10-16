@@ -1,8 +1,8 @@
 # E00: トークンを送ったときの応答の形式
 
-- 状態: 依頼中
+- 状態: 実施済み
 - 依頼日: 2026-09-25（2026-10-16 に [README](README.md) の「人が実行できる手順にする」に合わせて書き直した）
-- 実施日: 2026-10-16（書き直す前の手順で、シリアル経路の一部。結果は下の「結果」節）
+- 実施日: 2026-10-16（書き直す前の手順で一部を実施し、同じ日に書き直した手順で A-4・A-5・A-6 を実施した。結果は下の2つの「結果」節）
 - 実施者: kogai
 
 ## 目的
@@ -12,7 +12,7 @@ Mac から Bittle へシリアル経由でトークンを送ったとき、Bittl
 結果で、`SerialTransport`・`FakeTransport` の振る舞い（[06-transport.md](../docs/design/06-transport.md) 2節）と、
 `serialport` クレートを Mac で使えるか（[D-09](../docs/design/decisions.md)）が決まる。
 
-2026-10-16 の実施で、A-1〜A-3・A-7・A-8 の判定は済んだ（「結果」節）。**今回お願いするのは A-4・A-5・A-6 だけ。**
+2026-10-16 の実施で、A-1〜A-3・A-7・A-8 の判定は済んだ（「結果」節）。A-4・A-5・A-6 は、書き直したこの手順書で同じ日に実施した（2つ目の「結果」節）。
 
 この手順書で確かめないこと:
 
@@ -485,7 +485,7 @@ $ E00_EOL=CRLF E00_LOG=experimentals/raw/e00-a8.txt ./target/release/e00-serial-
 | 経路 | Wi-Fi 経路を実施しなかった | `HttpTransport` の成否の判定方法は未決定のまま |
 | 連続送信（A-5）・歩行（A-6） | 判定しない（ルールで外した。A-6 は電池の電圧が低い状態でもあった） | 書き直した手順書で再実施する |
 
-「（全体）手順どおりに進まなかった」に当たるのは、A-5（変形版で行った）・A-6・B。そこは書き直した手順で再依頼する。A-3・A-4・A-7・A-8 の出力による判定は有効とする。一部だけ実施したので、状態は「依頼中」のままにする。
+「（全体）手順どおりに進まなかった」に当たるのは、A-5（変形版で行った）・A-6・B。そこは書き直した手順で再依頼する。A-3・A-4・A-7・A-8 の出力による判定は有効とする。一部だけ実施したので、状態は「依頼中」のままにする（その後、2つ目の「結果」節の実施で「実施済み」にした）。
 
 ### 気づいたこと
 
@@ -495,3 +495,280 @@ $ E00_EOL=CRLF E00_LOG=experimentals/raw/e00-a8.txt ./target/release/e00-serial-
 - 電池の電圧が低いと `Low power:6V` と表示される。電池の電源が切れていると `Low power:0V`。
 - 電池の電圧が低いとき、起動の途中（`IMU` の行の約 3.9 秒後）で再起動することが繰り返しあった（A-4 1回目、A-5 1回目、A-8 1回目）。電源の不足によると推測する（**未確認**）。
 - 手順書の不足: A-2 の「先につなぐ」、待ち時間の設定、観察の手順が人の注意力・記憶力に合っていないこと（これを受けて #14〜#16 で道具とルールを直した）。
+
+## 結果: 書き直した手順での実施（2026-10-16）
+
+この節は、書き直した手順書（コミット `c940978`）で行った A-4・A-5・A-6 の記録。手順の番号と判定基準は、今の手順書のもの。
+
+### 環境（書き直した手順での実施）
+
+- Mac の OS・CPU: macOS 26.5.1、arm64（Apple シリコン）
+- `rustc --version`: rustc 1.94.1 (e408947bf 2026-03-25)
+- このリポジトリのコミット: `c940978`
+- 接続手段: USB アダプタ。脚は付けていない
+- 起動の表示の `N_` で始まる行: `N_260806`（ファームの版を表すと推測。**未確認**）
+- `E00_SETTLE_MS`: 8000（10000 には変えていない）
+- 1人で実施
+
+### 出力（書き直した手順での実施）
+
+実施者が会話に貼ったコマンドと出力を、エージェントが転記した。ポート名は `<PORT>` に伏せてある。ターミナルにだけ出る英文の警告（`the watchdog sent the stop token`、`!! STOP TOKEN NOT SENT` など）は、どの回にも無かった。
+
+#### P-6（1回目）
+
+```
+$ E00_LOG=experimentals/raw/e00-p6.txt ./target/release/e00-serial-probe <PORT> kbalance
+  1436.4 ms  <- "\x00"
+  1501.5 ms  <- "k\r\n\n* Start *\r\nBittle\r\nN_260806\r"
+  1503.6 ms  <- "\n"
+  3357.3 ms  <- "IMU\r\n"
+  3961.8 ms  <- "Servo:"
+  3979.4 ms  <- "24.70\r\n"
+  3996.7 ms  <- "Skill\r\n"
+  5514.4 ms  <- "Ready!\r\n"
+  5664.4 ms  <- "g\r\nd\r\n"
+  8001.3 ms  -> "kbalance"
+  8031.1 ms  <- "G\r\n"
+  8828.4 ms  <- "k\r\n"
+ 11001.7 ms  -> "d"
+ 11012.5 ms  <- "\n\r\n"
+```
+
+#### A-4 ksit
+
+```
+$ E00_FINAL_WAIT_MS=10000 E00_LOG=experimentals/raw/e00-a4-ksit.txt ./target/release/e00-serial-probe <PORT> ksit
+  1443.9 ms  <- "\x00"
+  1509.0 ms  <- "k\r\n\n* Start *\r\nBittle\r\nN_260806\r"
+  1511.0 ms  <- "\n"
+  3364.7 ms  <- "IMU\r\n"
+  3969.1 ms  <- "Servo:"
+  3991.3 ms  <- "24.70\r\n"
+  4003.9 ms  <- "Skill\r\n"
+  5521.5 ms  <- "Ready!\r\n"
+  6445.6 ms  <- "g\r\nd\r\n"
+  8000.8 ms  -> "ksit"
+  8030.7 ms  <- "G\r\n"
+  8932.6 ms  <- "k\r\n"
+ 18004.3 ms  -> "d"
+ 18020.2 ms  <- "\n\r\n"
+```
+
+#### A-4 kbalance 1回目（使わなかった回: `* Start *` が2回。起動の途中で再起動した。`Low power` は出ていない）
+
+```
+$ E00_FINAL_WAIT_MS=10000 E00_LOG=experimentals/raw/e00-a4-kbalance.txt ./target/release/e00-serial-probe <PORT> kbalance
+  1444.7 ms  <- "\x00"
+  1510.1 ms  <- "k\r\n\n* Start *\r\nBittle\r\nN_260806\r"
+  1512.2 ms  <- "\n"
+  3365.8 ms  <- "IMU\r\n"
+  7297.8 ms  <- "\x00"
+  7363.2 ms  <- "k\r\n\n* Start *\r\nBittle\r\nN_260806\r"
+  7365.4 ms  <- "\n"
+  8004.8 ms  -> "kbalance"
+  9218.7 ms  <- "IMU\r\n"
+  9823.4 ms  <- "Servo:"
+  9840.8 ms  <- "24.70\r\n"
+  9858.2 ms  <- "Skill\r\n"
+ 11375.6 ms  <- "Ready!\r\n"
+ 12223.9 ms  <- "k\r\n"
+ 18006.7 ms  -> "d"
+ 18016.1 ms  <- "\n\r\n"
+```
+
+#### P-6 2回目（`-r2`）
+
+```
+$ E00_LOG=experimentals/raw/e00-p6-r2.txt ./target/release/e00-serial-probe <PORT> kbalance
+  1446.2 ms  <- "\x00"
+  1511.5 ms  <- "k\r\n\n* Start *\r\nBittle\r\nN_260806\r"
+  1513.5 ms  <- "\n"
+  3367.3 ms  <- "IMU\r\n"
+  3972.0 ms  <- "Servo:"
+  3989.7 ms  <- "24.70\r\n"
+  4006.6 ms  <- "Skill\r\n"
+  5519.9 ms  <- "Ready!\r\n"
+  5669.4 ms  <- "g\r\nd\r\n"
+  8001.0 ms  -> "kbalance"
+  8030.8 ms  <- "G\r\n"
+  8774.0 ms  <- "k\r\n"
+ 11004.7 ms  -> "d"
+ 11019.1 ms  <- "\n\r\n"
+```
+
+#### A-4 kbalance 2回目（`-r2`）
+
+```
+$ E00_FINAL_WAIT_MS=10000 E00_LOG=experimentals/raw/e00-a4-kbalance-r2.txt ./target/release/e00-serial-probe <PORT> kbalance
+  1443.7 ms  <- "\x00"
+  1509.9 ms  <- "k\r\n\n* Start *\r\nBittle\r\nN_260806\r"
+  1511.5 ms  <- "\n"
+  3365.0 ms  <- "IMU\r\n"
+  3969.9 ms  <- "Servo:"
+  3987.3 ms  <- "24.70\r\n"
+  4004.4 ms  <- "Skill\r\n"
+  5522.0 ms  <- "Ready!\r\n"
+  6445.8 ms  <- "g\r\nd\r\n"
+  8003.1 ms  -> "kbalance"
+  8033.1 ms  <- "G\r\n"
+  8847.2 ms  <- "k\r\n"
+ 18004.1 ms  -> "d"
+ 18021.1 ms  <- "\n\r\n"
+```
+
+#### A-4 kwkF
+
+```
+$ E00_FINAL_WAIT_MS=10000 E00_LOG=experimentals/raw/e00-a4-kwkF.txt ./target/release/e00-serial-probe <PORT> kwkF
+  1445.9 ms  <- "\x00"
+  1511.2 ms  <- "k\r\n\n* Start *\r\nBittle\r\nN_260806\r"
+  1513.2 ms  <- "\n"
+  3366.6 ms  <- "IMU\r\n"
+  3971.4 ms  <- "Servo:"
+  3989.2 ms  <- "24.70\r\n"
+  4006.1 ms  <- "Skill\r\n"
+  5524.3 ms  <- "Ready!\r\n"
+  6414.0 ms  <- "g\r\nd\r\n"
+  8004.5 ms  -> "kwkF"
+  8034.5 ms  <- "G\r\n"
+  8379.4 ms  <- "k\r\n"
+ 18006.0 ms  -> "d"
+ 18016.5 ms  <- "\n\r\n"
+```
+
+#### A-4 khi 1回目
+
+```
+$ E00_FINAL_WAIT_MS=10000 E00_LOG=experimentals/raw/e00-a4-khi-1.txt ./target/release/e00-serial-probe <PORT> khi
+  1443.5 ms  <- "\x00"
+  1508.8 ms  <- "k\r\n\n* Start *\r\nBittle\r\nN_260806\r"
+  1510.8 ms  <- "\n"
+  3364.4 ms  <- "IMU\r\n"
+  3968.8 ms  <- "Servo:"
+  3986.4 ms  <- "24.70\r\n"
+  4003.8 ms  <- "Skill\r\n"
+  5521.6 ms  <- "Ready!\r\n"
+  5671.5 ms  <- "g\r\nd\r\n"
+  8001.6 ms  -> "khi"
+  8031.3 ms  <- "G\r\n"
+ 13487.3 ms  <- "k\r\n"
+ 18002.4 ms  -> "d"
+ 18012.6 ms  <- "\n\r\n"
+```
+
+#### A-4 khi 2回目
+
+```
+$ E00_FINAL_WAIT_MS=10000 E00_LOG=experimentals/raw/e00-a4-khi-2.txt ./target/release/e00-serial-probe <PORT> khi
+  1443.9 ms  <- "\x00"
+  1509.4 ms  <- "k\r\n\n* Start *\r\nBittle\r\nN_260806\r"
+  1511.2 ms  <- "\n"
+  3364.6 ms  <- "IMU\r\n"
+  3970.1 ms  <- "Servo:"
+  3986.7 ms  <- "24.70\r\n"
+  4003.9 ms  <- "Skill\r\n"
+  5521.7 ms  <- "Ready!\r\n"
+  6395.3 ms  <- "g\r\nd\r\n"
+  8001.0 ms  -> "khi"
+  8030.6 ms  <- "G\r\n"
+ 13506.9 ms  <- "k\r\n"
+ 18003.9 ms  -> "d"
+ 18014.1 ms  <- "\n\r\n"
+```
+
+#### A-4 khi 3回目
+
+```
+$ E00_FINAL_WAIT_MS=10000 E00_LOG=experimentals/raw/e00-a4-khi-3.txt ./target/release/e00-serial-probe <PORT> khi
+  1446.6 ms  <- "\x00"
+  1512.0 ms  <- "k\r\n\n* Start *\r\nBittle\r\nN_260806\r"
+  1514.0 ms  <- "\n"
+  3367.7 ms  <- "IMU\r\n"
+  3972.1 ms  <- "Servo:"
+  3989.7 ms  <- "24.70\r\n"
+  4006.9 ms  <- "Skill\r\n"
+  5524.7 ms  <- "Ready!\r\n"
+  5674.7 ms  <- "g\r\nd\r\n"
+  8000.4 ms  -> "khi"
+  8030.3 ms  <- "G\r\n"
+ 13503.6 ms  <- "k\r\n"
+ 18004.2 ms  -> "d"
+ 18014.5 ms  <- "\n\r\n"
+```
+
+#### A-5
+
+```
+$ E00_WAIT_MS=2000 E00_FINAL_WAIT_MS=10000 E00_LOG=experimentals/raw/e00-a5.txt ./target/release/e00-serial-probe <PORT> khi khi
+  1441.4 ms  <- "\x00"
+  1507.0 ms  <- "k\r\n\n* Start *\r\nBittle\r\nN_260806\r"
+  1508.9 ms  <- "\n"
+  3362.5 ms  <- "IMU\r\n"
+  3966.6 ms  <- "Servo:"
+  3984.3 ms  <- "24.70\r\n"
+  4001.5 ms  <- "Skill\r\n"
+  5519.1 ms  <- "Ready!\r\n"
+  5651.6 ms  <- "g\r\nd\r\n"
+  8005.2 ms  -> "khi"
+  8034.8 ms  <- "G\r\n"
+ 10011.8 ms  -> "khi"
+ 16609.2 ms  <- "k\r\n"
+ 20016.3 ms  -> "d"
+ 20027.6 ms  <- "\n\r\n"
+```
+
+#### A-6
+
+```
+$ E00_FINAL_WAIT_MS=5000 E00_ASK='前脚付近のサーボは、今動いていますか？' E00_LOG=experimentals/raw/e00-a6.txt ./target/release/e00-serial-probe <PORT> kwkF
+  1446.4 ms  <- "\x00"
+  1511.8 ms  <- "k\r\n\n* Start *\r\nBittle\r\nN_260806\r"
+  1513.6 ms  <- "\n"
+  3367.2 ms  <- "IMU\r\n"
+  3971.8 ms  <- "Servo:"
+  3989.3 ms  <- "24.70\r\n"
+  4006.4 ms  <- "Skill\r\n"
+  5524.4 ms  <- "Ready!\r\n"
+  5692.1 ms  <- "g\r\nd\r\n"
+  8002.2 ms  -> "kwkF"
+  8031.8 ms  <- "G\r\n"
+  8359.1 ms  <- "k\r\n"
+ 13005.4 ms  ?? 前脚付近のサーボは、今動いていますか？
+>>> LOOK NOW: 前脚付近のサーボは、今動いていますか？
+ 14509.4 ms  -> "d"
+>>> answer y (yes), n (no) or ? (could not tell), then press Enter:
+ 14521.4 ms  <- "\n\r\n"
+n
+ 21591.4 ms  answer: no
+```
+
+### 判定（書き直した手順での実施）
+
+使った回は、どれも `* Start *` が1回だけで、`Low power` は出ていない。`k` が返るまでの時間は、`->` の時刻から `k\r\n` を含む `<-` 行の時刻まで（どの回も `k\r\n` は1行で届いた）。
+
+| トークン | `-> ` の時刻 | `k` の時刻 | `k` までの時間 |
+|---|---|---|---|
+| `ksit` | 8000.8 ms | 8932.6 ms | 932 ms |
+| `kbalance`（2回目） | 8003.1 ms | 8847.2 ms | 844 ms |
+| `kwkF` | 8004.5 ms | 8379.4 ms | 375 ms |
+| `khi` 1回目 | 8001.6 ms | 13487.3 ms | 5486 ms |
+| `khi` 2回目 | 8001.0 ms | 13506.9 ms | 5506 ms |
+| `khi` 3回目 | 8000.4 ms | 13503.6 ms | 5503 ms |
+
+`khi` の範囲: 5486〜5506 ms を両側に 0.3 秒広げて、5186〜5806 ms。幅は 620 ms で 2 秒より狭く、上端の2倍は 11.6 秒で 12 秒以下。`khi` は3回とも 2 秒以上たってから返った。そのため、A-5 の「範囲に入る」の2行を使える。
+
+| 観察 | 結果 | 設計への影響 |
+|---|---|---|
+| 応答（A-4） | 6回すべてで `k` が返り、`kwkF` の `k` は 375 ms（1 秒以内）、`khi` の `k` は3回とも約 5.5 秒（2 秒以上）。判定基準の1行目に当たる | `k` は「動作を終えた（歩行は受け付けた）」しるしと読める。`SerialTransport::send` は `k` を待って成否を判定できる。待つ時間の上限は、A-4 の値をもとにトークンごとに決める（反映の PR で決める） |
+| 連続送信（A-5） | `k` は1つだけ（16609.2 ms）。1回目の送信（8005.2 ms）から 8604 ms、2回目の送信（10011.8 ms）から 6597 ms。どちらも `khi` の範囲（5186〜5806 ms）に入らない。判定基準の「分からなかった」の行に当たる | 分からなかった。安全側に倒し、同じトークンの連続送信を抑止する |
+| 歩行（A-6） | `answer: no`（5 秒後には、前脚付近のサーボは動いていなかった） | 歩行中は一定間隔で再送する設計に変える。ただし脚を付けていない状態での結果で、脚を付けたときも同じかは**未確認** |
+| 道具 | P-4〜P-6 と A-4〜A-6 で、道具が実機で動いた（P-2 の `Finished` の出力は貼られていないが、動いたのでビルドはできたと読める）。`E00_ASK` の問い（日本語）も表示され、答えがログに残った | `SerialTransport` は `serialport` クレートで書く（2026-10-16 の判定どおり） |
+
+A-4・A-5・A-6 はすべて判定できたので、状態を「実施済み」にする。Wi-Fi 経路、`d` で止まるか、送信間隔の下限は、この手順書では確かめない（「目的」節）。
+
+### 気づいたこと（書き直した手順での実施）
+
+- A-4 kbalance 1回目は、`Low power` が出ていないのに、起動の途中（`IMU` の行の約 3.9 秒後）で再起動した。前回の再起動と同じ時点。原因は**未確認**。
+- A-5 では、2回目の `khi` に `G` が返っていない（1回目の後にだけ `G` がある）。`k` は、2回目の送信から数えると、`khi` 1回分（約 5.5 秒）より約 1.1 秒遅く返った（1回目から数えると約 3.1 秒遅い）。2回目がどう扱われたかは、この出力からは決められない（推測しない）。
+- A-6 の `k`（357 ms）と A-4 の `kwkF`（375 ms）は近い。
+- `kwkF` の送信から 5 秒後（問いが出た時点）には動いていなかった。止まった時刻は、この手順では分からない。
