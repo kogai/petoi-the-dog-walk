@@ -63,3 +63,5 @@ mise run check               # 公開内容 / fmt / clippy / doc / 依存の境�
 - [fight.js](https://raw.githubusercontent.com/lavallee/mk-jev-fly-brain/main/mk/fight.js)
 - [jev.py](https://raw.githubusercontent.com/lavallee/mk-jev-fly-brain/main/jev.py)（Jev の HTTP API の呼び方。F-J9）
 - [server.py](https://raw.githubusercontent.com/lavallee/mk-jev-fly-brain/main/server.py)
+- [philshiu/Drosophila_brain_model](https://github.com/philshiu/Drosophila_brain_model)（Shiu et al. のモデル。F-F14）
+- [eonsystemspbc/fly-brain](https://github.com/eonsystemspbc/fly-brain)（Shiu et al. のモデルの移植版。F-F16）
