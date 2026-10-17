@@ -59,6 +59,17 @@ E00 の2回の実施による。回数が少ないので、値は目安。
 
 出典: E00（[experimentals/E00-connectivity.md](../../experimentals/E00-connectivity.md)）。「実施」の列は、どちらの「結果」節の記録によるか。
 
+## Raspberry Pi
+
+| ID | 事実 |
+|---|---|
+| F-R1 | Raspberry Pi 3 Model B（3B）の CPU は 64 ビットの Arm Cortex-A53 が4コアで、各コア 1.2 GHz（最新の版の SoC は BCM2837B0。版 1.1 は BCM2837 で、販売を終えている）。RAM は 1 GB（LPDDR2）。大きさは約 85 mm × 56 mm。Raspberry Pi 3A+ は約 65 mm × 56 mm |
+| F-R2 | Raspberry Pi はどの型も 5.1V の電源が要る。3B に推奨する電源は 2.5A。公式の測定では、3B の電流は、待機の平均 0.30A、負荷（Stress）の最大 1.34A・平均 0.85A（2016年2月26日時点の Raspberry Pi OS のイメージ、室温で、HDMI・USB のキーボードとマウス・無線 LAN をつないだ状態。追加の USB 機器や HAT の分は含まない） |
+
+出典（Raspberry Pi 公式ドキュメントのソース。`raspberrypi/documentation` のコミット `ddea98e` で確認）:
+- F-R1: [sbc-models.adoc](https://github.com/raspberrypi/documentation/blob/ddea98e98dafe9419feb4fd82710c2fbdef7dc44/documentation/asciidoc/computers/sbcs/sbc-models.adoc)（Raspberry Pi 3 Model B、3A+ の節）、[bcm2837.adoc](https://github.com/raspberrypi/documentation/blob/ddea98e98dafe9419feb4fd82710c2fbdef7dc44/documentation/asciidoc/computers/processors/bcm2837.adoc)
+- F-R2: [power-supplies.adoc](https://github.com/raspberrypi/documentation/blob/ddea98e98dafe9419feb4fd82710c2fbdef7dc44/documentation/asciidoc/computers/raspberry-pi/power-supplies.adoc)
+
 ## 動作トークン（F-T1、公式 `actions.h` で確認済み）
 
 | 動作名 | トークン |
