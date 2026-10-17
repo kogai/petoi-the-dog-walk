@@ -14,27 +14,29 @@
 | F-B1 | MCU は ATmega328P（16MHz、SRAM 2KB、Flash 32KB） |
 | F-B2 | 基板上に 6軸 IMU（MPU6050）と赤外線受信機（VS1838B）がある |
 | F-B3 | 拡張用 Grove ソケットが4つある（G1: I2C、G2: アナログ A2/A3、G3: D8/D9、G4: D6/D7） |
-| F-B4 | 通信のボーレートは 115200。公式 Bluetooth ドングルがある |
-| F-B5 | Wi-Fi は公式の ESP8266 モジュール（別売の拡張）で使える。公式サンプルは HTTP サーバーで、`http://<IP>/action?name=<動作名>` を受け、シリアルコマンドに変換して NyBoard へ渡す |
+| F-B4 | 通信ポートの既定のボーレートは 115200。2021年1月1日から、公式の Bluetooth ドングルを同梱している（手元の機体に付いているかは未確認） |
+| F-B5 | Wi-Fi は公式の ESP8266 モジュールで使える。公式サンプルは HTTP サーバーで、`http://<IP>/action?name=<動作名>` を受け、シリアルコマンドに変換して NyBoard へ渡す |
 | F-B6 | Python API（PetoiRobot）に `sendSkillStr('ksit', 3)` や `autoConnect()` などがある。立つ姿勢の例は `kup` |
 | F-B8 | 公式の Wi-Fi スケッチ（`ESP8266WiFiController.ino`）の `/action` は、`name` が動作名の表（`actions.h`）にあれば対応するトークンを、**無ければ `name` の文字列をそのまま**シリアルへ送る。応答の本文は、その後 40ms 以内にシリアルから読めた文字列（`text/plain`）。表の `stop` は `d`。ほかに `/calibration?c=<関節>&o=<値>` が `c<関節> <値>` を送る。**実機に書き込まれたスケッチが、このコードと同じかは未確認**（E04） |
 | F-B19 | 公式のファーム（OpenCat）の `read_serial`（`src/io.h`）は、受信バッファの最初の1バイトをトークンとし、続くバイトを、最後に読んだバイトが終端（小文字のトークンなら `\n`、大文字なら `~`）になるか、バイトの来ない時間が `SERIAL_TIMEOUT`（5 ms。`src/OpenCat.h`）を超えるまで、そのトークンの引数として読む。その間は、届いているバイトをまとめて読む。**基板に書き込まれたファームが、このコードと同じかは未確認**（起動の表示の `N_260806` は、このコミットの `SOFTWARE_VERSION` と同じ） |
 | F-B20 | 公式のファーム OpenCat の README は、OpenCat を「Arduino と Raspberry Pi を土台にした」フレームワークと書き、拡張の1つに「Raspberry Pi、Nvidia Jetson Nano などの AI コプロセッサー（有線・無線でつなぐ）」を挙げている。README の「Current Hardware」は Bittle X（BiBoard/ESP32）と Nybble Q で、初代 Bittle（NyBoard/ATmega328P）は販売終了だがこのリポジトリで扱うと書いている。ESP32 の BiBoard は、別のリポジトリ `OpenCatEsp32-Quadruped-Robot` で扱う |
 | F-B21 | 公式の手順「Raspberry Pi serial port as an interface」は、次のように書いている。NyBoard に 2x5 のソケットをはんだ付けすると、Raspberry Pi を差せる。NyBoard の大きさに最も合うのは Pi 3A+。Bittle では、ソケットをはんだ付けすると背中のカバーを付けられなくなる。Pi を支える台（standoff）は 3D プリントできる（STL が公開されている）。ソケットに差すと、両者のシリアルは 3.3V でつながるはず（"should be"）と書いている。NyBoard のシリアルは1つだけなので、Pi のシリアルで動かすときは USB アダプタを外す（Pi を載せる前に 6ピンの USB アダプタを外す）。Pi の側では、`raspi-config` でシリアルのログインシェルを無効にし、シリアルのハードウェアを有効にする。また、GPIO 4 からリセットの信号が繰り返し送られないように、1-wire を無効にする。Pi のような上位の機械は、引数をバイナリで送るコマンドも使える（角度 65 を1バイトで送る、など）。例として Python の `ardSerial.py` を挙げ、`ardSerial.py` と `OpenCat.ino` の解析はプロトコルのすべてには対応していないと書いている。電源の注意は Nybble についてだけ（Pi の電流で激しい動きがしにくくなる）で、Bittle についての記述は無い。冒頭に「ロボットが動くのに Pi は要らない」とある。ページに日付や対象のファームの版は書かれていない |
 | F-B22 | NyBoard V1_1 & V1_2 のページの「Power system」節は、Raspberry Pi は電力を多く使うので、DC-DC の TPS565201 で 5V 3A（ピークは 5A）を出すと書いている。「I2C switch」節は、スイッチを「Arduino」か「Raspberry Pi」に倒して、基板の周辺機器の I2C のマスターを切り替えられると書いている。**手元の基板の版（V1_0・V1_1・V1_2）は未確認** |
+| F-B23 | 公式の「Serial Protocol」のページは、どのトークンも、続きの解析の形を決める ASCII の1文字で始まり、大文字と小文字を区別し、ふつうは小文字だと書いている。シリアルモニターで試す例に `ksit`、`m0 30`、`m0 -30`、`kbalance`、`kwkF`、`ktrL`、`d` を挙げ、`c` と `m` のコマンドはまとめて書ける（`m8 40 8 -35 0 50` など）としている |
 
 出典（Petoi 公式ドキュメント）:
-- F-B1〜F-B3: [NyBoard V1_1 & V1_2](https://docs.petoi.com/nyboard/nyboard-v1_1-and-nyboard-v1_2.md)、[Extensible modules: Introduction](https://docs.petoi.com/extensible-modules/introduction.md)
-- F-B4: [Serial Protocol](https://docs.petoi.com/apis/serial-protocol.md)
+- F-B1〜F-B3: [NyBoard V1_1 & V1_2](https://docs.petoi.com/nyboard/nyboard-v1_1-and-nyboard-v1_2.md)（V1_1 は V1_0 からソケットとピンの定義を変えていない、とページに書かれている）、[Extensible modules: Introduction](https://docs.petoi.com/extensible-modules/introduction.md)
+- F-B4: [NyBoard V1_1 & V1_2](https://docs.petoi.com/nyboard/nyboard-v1_1-and-nyboard-v1_2.md)（「Overview」節。[Serial Protocol](https://docs.petoi.com/apis/serial-protocol.md) の本文（画像・埋め込みのコードを除く）には、ボーレートも Bluetooth ドングルも書かれていない）
 - F-B5: [WiFi module ESP8266](https://docs.petoi.com/communication-modules/wifi-esp8266.md)、[ESP8266 + Python Scripts](https://docs.petoi.com/communication-modules/wifi-esp8266/esp8266-+-python-scripts-implement-wireless-crowd-control.md)
 - F-B6: [Python API](https://docs.petoi.com/apis/python-api.md)
+- F-B23: [Serial Protocol](https://docs.petoi.com/apis/serial-protocol.md)（2026-10-17 に本文を読んだ。画像・埋め込みのコードは読んでいない）
 - F-B21: [Raspberry Pi serial port as an interface](https://docs.petoi.com/apis/raspberry-pi-serial-port-as-an-interfac.md)（2026-10-17 に読んだ。`…-interface.md` の URL は、末尾の `e` が無いこの URL へ転送される）
 - F-B22: [NyBoard V1_1 & V1_2](https://docs.petoi.com/nyboard/nyboard-v1_1-and-nyboard-v1_2.md)（2026-10-17 に読んだ）
 - F-B19: [io.h](https://github.com/PetoiCamp/OpenCat/blob/24563ca2e0218150f6299d013cd3a20c45433467/src/io.h)、[OpenCat.h](https://github.com/PetoiCamp/OpenCat/blob/24563ca2e0218150f6299d013cd3a20c45433467/src/OpenCat.h)（コミット `24563ca` のコードで確認）
 - F-B8: [ESP8266WiFiController.ino](https://github.com/PetoiCamp/OpenCat/blob/24563ca2e0218150f6299d013cd3a20c45433467/ModuleTests/ESP8266WiFiController/ESP8266WiFiController.ino)、[actions.h](https://github.com/PetoiCamp/OpenCat/blob/24563ca2e0218150f6299d013cd3a20c45433467/ModuleTests/ESP8266WiFiController/actions.h)（コミット `24563ca` のコードで確認）
 - F-B20: [OpenCat の README.md](https://github.com/PetoiCamp/OpenCat/blob/24563ca2e0218150f6299d013cd3a20c45433467/README.md)（コミット `24563ca` で確認）
 
-> 事実ごとの出典の対応は、計画書の時点で記録されていなかった。上は文書の範囲から当てたもの。個々の事実を設計の根拠にするときは、該当ページで確かめ直し、この対応を直す。
+> 事実ごとの出典の対応は、計画書の時点で記録されていなかった。F-B1〜F-B6 は、2026-10-17 に上のページを読み直して確かめた。そのとき、F-B4 の出典を Serial Protocol から NyBoard のページに直し、F-B4 を出典の書き方（既定値、同梱の時期）に合わせた。F-B5 にあった「別売の拡張」は出典に書かれていなかったので外した。Serial Protocol のページの内容は F-B23 にした。
 
 ## Bittle の実機（実験で確認）
 
