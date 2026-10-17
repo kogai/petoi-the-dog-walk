@@ -40,5 +40,5 @@
 | E17 | Node で `flybrain.js` を同じ種で動かしたときの出力の再現性と、100ms 分の計算時間 | （新規） | D-06（[04](04-reflex-layer.md) 5節）、D-18（04 6節） |
 
 - E09〜E12 は計画だけ。依頼するかは D-13 で決める。
-- E17 は実機も API キーも使わないので、人に依頼せず、エージェントが実行して記録する。手順書は作らない。
+- E17 は実機も API キーも使わないので、人に依頼せず、エージェントが実行して記録する。依頼の PR は出さず、手順と結果を [E17-node-flybrain.md](../../experimentals/E17-node-flybrain.md) に記録する。測る対象が Node で動く JavaScript の実装そのものなので、計時の道具も JavaScript で書き、同じプロセスで測る（実験の道具を Rust で書く [experimentals/README.md](../../experimentals/README.md) の決まりの例外）。
 - E03 は欠番。計画書の項目3「反射で反応させる対象を決める」は実験ではなく決定なので、D-02 にした。
