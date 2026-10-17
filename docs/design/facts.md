@@ -19,6 +19,7 @@
 | F-B6 | Python API（PetoiRobot）に `sendSkillStr('ksit', 3)` や `autoConnect()` などがある。立つ姿勢の例は `kup` |
 | F-B8 | 公式の Wi-Fi スケッチ（`ESP8266WiFiController.ino`）の `/action` は、`name` が動作名の表（`actions.h`）にあれば対応するトークンを、**無ければ `name` の文字列をそのまま**シリアルへ送る。応答の本文は、その後 40ms 以内にシリアルから読めた文字列（`text/plain`）。表の `stop` は `d`。ほかに `/calibration?c=<関節>&o=<値>` が `c<関節> <値>` を送る。**実機に書き込まれたスケッチが、このコードと同じかは未確認**（E04） |
 | F-B19 | 公式のファーム（OpenCat）の `read_serial`（`src/io.h`）は、受信バッファの最初の1バイトをトークンとし、続くバイトを、最後に読んだバイトが終端（小文字のトークンなら `\n`、大文字なら `~`）になるか、バイトの来ない時間が `SERIAL_TIMEOUT`（5 ms。`src/OpenCat.h`）を超えるまで、そのトークンの引数として読む。その間は、届いているバイトをまとめて読む。**基板に書き込まれたファームが、このコードと同じかは未確認**（起動の表示の `N_260806` は、このコミットの `SOFTWARE_VERSION` と同じ） |
+| F-B20 | 公式のファーム OpenCat の README は、OpenCat を「Arduino と Raspberry Pi を土台にした」フレームワークと書き、拡張の1つに「Raspberry Pi、Nvidia Jetson Nano などの AI コプロセッサー（有線・無線でつなぐ）」を挙げている。ESP32 の BiBoard（README は「現行のハードウェア」と書く）は、別のリポジトリ `OpenCatEsp32-Quadruped-Robot` で扱う |
 
 出典（Petoi 公式ドキュメント）:
 - F-B1〜F-B3: [NyBoard V1_1 & V1_2](https://docs.petoi.com/nyboard/nyboard-v1_1-and-nyboard-v1_2.md)、[Extensible modules: Introduction](https://docs.petoi.com/extensible-modules/introduction.md)
@@ -27,6 +28,7 @@
 - F-B6: [Python API](https://docs.petoi.com/apis/python-api.md)
 - F-B19: [io.h](https://github.com/PetoiCamp/OpenCat/blob/24563ca2e0218150f6299d013cd3a20c45433467/src/io.h)、[OpenCat.h](https://github.com/PetoiCamp/OpenCat/blob/24563ca2e0218150f6299d013cd3a20c45433467/src/OpenCat.h)（コミット `24563ca` のコードで確認）
 - F-B8: [ESP8266WiFiController.ino](https://github.com/PetoiCamp/OpenCat/blob/24563ca2e0218150f6299d013cd3a20c45433467/ModuleTests/ESP8266WiFiController/ESP8266WiFiController.ino)、[actions.h](https://github.com/PetoiCamp/OpenCat/blob/24563ca2e0218150f6299d013cd3a20c45433467/ModuleTests/ESP8266WiFiController/actions.h)（コミット `24563ca` のコードで確認）
+- F-B20: [OpenCat の README.md](https://github.com/PetoiCamp/OpenCat/blob/24563ca2e0218150f6299d013cd3a20c45433467/README.md)（コミット `24563ca` で確認）。Raspberry Pi をつなぐ手順の公式ページ（`docs.petoi.com` の「Raspberry Pi serial port as an interface」）は、まだ読んでいない
 
 > 事実ごとの出典の対応は、計画書の時点で記録されていなかった。上は文書の範囲から当てたもの。個々の事実を設計の根拠にするときは、該当ページで確かめ直し、この対応を直す。
 

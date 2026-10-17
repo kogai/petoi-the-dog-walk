@@ -12,7 +12,7 @@
 
 ## 2. やらないこと（設計案）
 
-- Bittle 側ファームウェアへのシミュレーション搭載（ATmega328P に載らない。[facts.md](facts.md) F-B1）。
+- Bittle 側ファームウェアへのシミュレーション搭載（ATmega328P に載らない。[facts.md](facts.md) F-B1）。別のボードを機体に積んで動かす案は D-18 で検討する。
 - Jev に文章を生成させること（Jev は生成しない。F-J1）。
 - Jev に優先順位の判定を任せること（コード側で行う。[05-arbitration.md](05-arbitration.md)）。
 - カメラの深掘り（方針として後回し）。
