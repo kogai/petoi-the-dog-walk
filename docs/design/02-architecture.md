@@ -153,4 +153,5 @@ pub struct Token(&'static str);
 ## 6. 設定と文章
 
 - 人が書く文章は `profiles/<名前>/` に置く（例: `personality.md`、`skills.toml`）。形式は D-05。
+- 反射層の結果を待つ上限は、起動時の引数で変えられる（D-19 (5)）。
 - 秘密情報（`TYPESAFE_API_KEY`、Bittle の IP など）は環境変数で渡す。リポジトリに入れない。
