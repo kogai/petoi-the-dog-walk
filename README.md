@@ -42,6 +42,7 @@ mise run check               # 公開内容 / fmt / clippy / doc / 依存の境�
 **Petoi**
 - [Serial Protocol](https://docs.petoi.com/apis/serial-protocol.md)
 - [Python API](https://docs.petoi.com/apis/python-api.md)
+- [Raspberry Pi serial port as an interface](https://docs.petoi.com/apis/raspberry-pi-serial-port-as-an-interfac.md)
 - [NyBoard V1_1 & V1_2](https://docs.petoi.com/nyboard/nyboard-v1_1-and-nyboard-v1_2.md)
 - [WiFi module ESP8266](https://docs.petoi.com/communication-modules/wifi-esp8266.md)
 - [ESP8266 + Python Scripts](https://docs.petoi.com/communication-modules/wifi-esp8266/esp8266-+-python-scripts-implement-wireless-crowd-control.md)
