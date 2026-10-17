@@ -13,7 +13,7 @@
  │                                                                │
  │  sensing ──Observation──┬──▶ reasoner (Jev, 別スレッド) ─ReasonedDecision─┐
  │     ▲                   │                                                 ▼
- │     │                   └──▶ reflex (ハエ脳)  ──ReflexOutput──────▶ arbitrate ──Action──▶ executor
+ │     │                   └──▶ reflex (ハエ脳, 別スレッド) ─ReflexOutput─▶ arbitrate ──Action──▶ executor
  │     │                                                              (純粋関数)              │
  │     └──────────────────────────── transport ◀──────────── Token 列 ◀─────────────────────┘
  └───────────────────────────────┬────────────────────────────────┘
@@ -101,7 +101,7 @@ pub struct ReflexOutput {
 pub trait Reasoner: Send { // 別スレッドで回すので Send
     fn decide(&mut self, obs: &Observation) -> Result<ReasonedDecision, ReasonError>;
 }
-pub trait Reflex {
+pub trait Reflex: Send { // 別スレッドで回すので Send（D-06）
     fn step(&mut self, obs: &Observation) -> ReflexOutput;
 }
 pub trait Transport {
@@ -132,7 +132,7 @@ pub struct Token(&'static str);
 
 ## 4. 時間とスレッド
 
-- 反射層と調停は 100ms 周期（F-F1 に合わせる）。反射層の計算が周期を超えたときの扱いは D-06 で決めた（E17 で、JS の実装に 100ms 以上の窓があった。F-F19）。
+- 調停は 100ms 周期（F-F1 に合わせる）。反射層は別スレッドで回し、結果をチャネルで送る。ループは反射層の計算を待たない。計算が周期を超えたときの扱いは D-06（E17 で、JS の実装に 100ms 以上の窓があった。F-F19）。
 - 理性層の所要時間は、cookbook の例で 0.09〜0.31 秒（F-J6）、fly-brain の README では約350ms（F-F5）。このシステムではまだ測っていない。
   100ms 周期を超えうるので、理性層は別スレッドで回し、結果をチャネルで送る。ループは最新の結果だけを使う。
 - 非同期ランタイム（tokio など）は使わない。標準のスレッドとチャネルで足りる。
@@ -144,10 +144,11 @@ pub struct Token(&'static str);
 | 状況 | 振る舞い |
 |---|---|
 | Jev の呼び出し失敗・タイムアウト | その回の判断は無し扱い。以後の扱いは調停の規則に従う（[05](05-arbitration.md)） |
+| 反射層の結果が、待つ上限を過ぎても来ない | 反射層の失敗として `stop()` を呼ぶ（D-06） |
 | API キーが無い | 起動時に理性層を無効にして、反射層だけ（または既定動作だけ）で動く |
 | 送信失敗（書き込みの失敗） | 再試行は1回まで。続けて失敗したら停止してループを抜ける。応答の時間切れ・知らないトークンの応答では、同じトークンを送り直さない（[06](06-transport.md) 2.1節） |
 | 送信失敗で止めるとき | 停止トークン自体が届かない可能性がある。届かなかったことを端末にはっきり表示し、電源を切るよう促す |
-| 終了・Ctrl-C・panic | 停止（Bittle では `d`、F-T1）を送ってから閉じる。通常終了と Ctrl-C・SIGTERM では、`walk-app` が明示して `stop()` を呼ぶ（Ctrl-C・SIGTERM はシグナル処理（`ctrlc` か `signal-hook` クレート）で立てたフラグをループが見て行う）。`Drop` は panic の巻き戻しと最後の備え（ADR-0001 S1）。`panic = "abort"` や SIGKILL では送れないので、ビルド設定で巻き戻しを使い、非常時は電源を切る |
+| 終了・Ctrl-C・panic | 停止（Bittle では `d`、F-T1）を送ってから閉じる。通常終了と Ctrl-C・SIGTERM では、`walk-app` が明示して `stop()` を呼ぶ（Ctrl-C・SIGTERM はシグナル処理（`ctrlc` か `signal-hook` クレート）で立てたフラグをループが見て行う）。どの停止も反射層の計算を待たず、終了では反射層の後始末より先に `stop()` を呼ぶ（D-06）。`Drop` は panic の巻き戻しと最後の備え（ADR-0001 S1）。`panic = "abort"` や SIGKILL では送れないので、ビルド設定で巻き戻しを使い、非常時は電源を切る |
 
 ## 6. 設定と文章
 
