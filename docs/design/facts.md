@@ -152,3 +152,14 @@ E00 の2回の実施による。回数が少ないので、値は目安。
 | F-F17 | [snedea/flybrain](https://github.com/snedea/flybrain) は、FlyWire FAFB v783 の 139,255 ニューロン・270万結合をブラウザの LIF で動かす、`heyseth/worm-sim` のフォーク（README）。`mk-jev-fly-brain` のコード・README・`CREDITS.md` は、このリポジトリに触れていない（コミット `8217937` で確認） |
 
 出典: F-F14・F-F15 は `philshiu/Drosophila_brain_model` のコミット `91bdd1e`（[Readme.md](https://github.com/philshiu/Drosophila_brain_model/blob/91bdd1e7dcf193f3e7ca5a8933497fcef63b7960/Readme.md)、[model.py](https://github.com/philshiu/Drosophila_brain_model/blob/91bdd1e7dcf193f3e7ca5a8933497fcef63b7960/model.py)、`LICENSE`）、F-F16 は `eonsystemspbc/fly-brain` のコミット `a3db62f`（[README.md](https://github.com/eonsystemspbc/fly-brain/blob/a3db62f9436074e485c0278290c2164ed6150808/README.md)、`data/results/nature_2026_07/no_io/README.md`、`LICENSE`、[timing_summary.csv](https://github.com/eonsystemspbc/fly-brain/blob/a3db62f9436074e485c0278290c2164ed6150808/data/results/nature_2026_07/no_io/timing_summary.csv)）、F-F17 は `snedea/flybrain` のコミット `9191824` の [readme.md](https://github.com/snedea/flybrain/blob/9191824d17871b7851645782d53d23f213ddb938/readme.md)。論文そのものは読んでいない
+
+## ハエ脳（実験で確認）
+
+E17 の2回の実施による（判定は2回目の記録。1回目も同じ判定）。条件: `mk-jev-fly-brain` のコミット `8217937` の `mk/flybrain.js` と `mk/fly_circuit.js`、Node v22.22.0、クラウドの作業用コンテナ（`lscpu` の `CPU(s)` が 4、`Model name` が `Intel(R) Xeon(R) Processor @ 2.80GHz`）。`flybrain.js` は1スレッドで計算する（下の出典のコードを読んだ範囲）。
+
+| ID | 事実 |
+|---|---|
+| F-F18 | 同じ機械・同じ Node で、種を同じにすると出力が一致した。`scripts/js/probe_channels.mjs`（種 7。import 先だけを直したコピー）の2回の出力がバイト単位で一致し、`FlyBrain.step(100)` を100回呼んだ戻り値も、感覚の入力が無い場合と `loom_L`・`loom_R` に 100 Hz を入れた場合の両方で、種 7 の2回が一致した。種 8 では違った。別の機械・別の版の Node では確かめていない |
+| F-F19 | `FlyBrain.step(100)`（100ms 分）1回の計算時間は、4つの計測（2つの入力 × 2回、各100回）の中央値が 48.3〜55.9 ms、最大が 82.2〜101.7 ms で、100ms 以上の窓があった（101.7 ms）。1回目の記録では、最大が 106.1〜122.9 ms だった。回路の読み込みと `FlyBrain` の構築の時間は含まない。最大が大きくなる理由は調べていない |
+
+出典: E17（[experimentals/E17-node-flybrain.md](../../experimentals/E17-node-flybrain.md)）。1スレッドで計算することは、[flybrain.js](https://github.com/lavallee/mk-jev-fly-brain/blob/8217937e6e725b0ce3160c6e1ab0183db8b8aa30/mk/flybrain.js)（コミット `8217937`）を読んで確かめた

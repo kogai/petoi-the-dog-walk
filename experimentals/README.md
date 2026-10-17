@@ -24,7 +24,7 @@
 | E14 | — | 未依頼 |
 | E15 | — | 未依頼 |
 | E16 | — | 未依頼 |
-| E17 | [E17-node-flybrain.md](E17-node-flybrain.md) | 実施済み（人に依頼せず、エージェントが実行した） |
+| E17 | [E17-node-flybrain.md](E17-node-flybrain.md) | 反映済み（人に依頼せず、エージェントが実行した） |
 
 E09〜E12 は計画だけで、依頼するかは [D-13](../docs/design/decisions.md) で決める（[08](../docs/design/08-navigation.md) 5節）。
 
