@@ -54,7 +54,7 @@ Rust 版の出力と比べるテスト（ゴールデンテスト）で確かめ
 | Shiu et al. の `model.py`（F-F14、F-F15） | 論文で使われたモデル。移植版を Brian 2 版と比べた先例がある（F-F16） | 脳全体のままでは、Brian 2 の CPU 版でも実時間より遅い（F-F16。第三者の測定）。100ms 周期で使うには部分回路を作る必要がある見込み（F-F16 は第三者の測定で、機械は不明）。Brian 2 の乱数の列を Rust で再現するのは難しい見込みで（未確認）、比べるのは分布になる見込み |
 
 ライセンス（設計案）: このリポジトリは MIT（`Cargo.toml` の `license`）。
-- `mk-jev-fly-brain` のコードと Shiu et al. の `model.py` は MIT（F-F13、F-F14）なので、著作権表示を残せば参照して移植してよい。
+- `mk-jev-fly-brain` のコードと Shiu et al. の `model.py` は MIT（F-F13、F-F14）なので、著作権表示と許諾文（元の MIT ライセンスの本文）を残せば、参照して移植してよい。
 - 部分回路 `fly_circuit.js` は CC-BY 4.0（F-F13）なので、使うなら帰属表示を付ける。
 - Shiu et al. のリポジトリの配線データ（FlyWire 由来）のライセンスは未確認。
 - `eonsystemspbc/fly-brain` は GPL-2.0（F-F16）なので、コードは写さず、比べ方を参考にするだけにする。
