@@ -180,11 +180,11 @@ E17 の2回の実施による（判定は2回目の記録。1回目も同じ判�
 | F-N8 | Burgard, Fox, Thrun 1999（Markov 位置推定。要旨だけ読んだ。arXiv 1106.0222）: ロボットのいそうな位置すべてに確率を持ち、細かい格子で表す。最初から位置を探すことも、見失った後に立ち直ることもできる。環境の大まかなモデル（占有格子の地図など）を前提にする |
 | F-N9 | OpenRatSLAM（README とコードだけ読んだ。論文は読めなかった）: 連続アトラクターの回路の動きに基づく、生物に学んだ SLAM。ループを閉じてオドメトリの誤差を直す。設定の例（車で撮ったデータセット用の `config/config_stlucia.txt.in`）には `camera_fov_deg=53` があり、全周でないカメラで使う例がある。C++ と ROS の実装で、GPL v3（`davidmball/ratslam` のコミット `9050b95` の `license.txt`） |
 | F-N10 | Wisth, Camurri, Fallon 2021（VILENS。要旨だけ読んだ。arXiv 2107.07243）: 脚ロボットのオドメトリ。視覚・IMU・LiDAR・脚の4つを因子グラフで密に組み合わせ、1つのセンサーでは推定が成り立たない場面でも動くようにした。脚オドメトリのずれを減らすため、速度のずれ（bias）を状態に加えてその場で推定する。ANYmal で合計 2時間・1.8km、滑りや地面の変形のある場所で試し、ゆるく組み合わせる方法より並進の誤差を平均 62%、回転の誤差を 51% 減らした |
-| F-N11 | Yang et al. 2022（Cerberus。要旨と README だけ読んだ。arXiv 2209.07654）: ステレオカメラ・IMU・関節のエンコーダー・接地センサーを使う、視覚・慣性・脚のオドメトリ。脚の幾何のパラメーターをその場で較正し、接地の外れ値を除いて、長距離・高速の歩行でずれを 1% 未満にした。大きな衝撃やカメラが隠れたときにも働いた。README は、VINS-Fusion の最適化の枠組みに接地の項を足したと書いている。リポジトリ（`ShuoYangRobotics/Cerberus` のコミット `ad56c43`）の根にライセンスのファイルは無い |
-| F-N12 | Lim et al. 2021（WALK-VIO。要旨だけ読んだ。arXiv 2111.15164）: 四脚ロボットでは、歩く動きによる揺れがカメラと IMU を通して位置の推定を悪くする。歩き方・速度・制御によって揺れ方が変わるので、脚の幾何の拘束の重みを体の動きに合わせて変える VIO を提案した。評価はシミュレーションのデータセット |
+| F-N11 | Yang et al. 2022（Cerberus。要旨と README・`LICENCE` だけ読んだ。arXiv 2209.07654）: ステレオカメラ・IMU・関節のエンコーダー・接地センサーを使う、視覚・慣性・脚のオドメトリ。脚の幾何のパラメーターをその場で較正し、接地の外れ値を除いて、長距離・高速の歩行でずれを 1% 未満にした。大きな衝撃やカメラが隠れたときにも働いた。README は、VINS-Fusion の最適化の枠組みに接地の項を足したと書いている。コードは GPL v3（`ShuoYangRobotics/Cerberus` のコミット `ad56c43` の `LICENCE`） |
+| F-N12 | Lim et al. 2021（WALK-VIO。要旨だけ読んだ。arXiv 2111.15164）: 四脚ロボットでは、歩く動きによる揺れがカメラと IMU を通して位置の推定を悪くする。歩き方・速度・制御によって揺れ方が変わるので、脚の幾何の拘束の重みを体の動きに合わせて変える VIO を提案した。要旨に書かれた評価用のデータセットは、シミュレーションで作ったもの（実機での評価の有無は要旨からは分からない） |
 | F-N13 | Campos et al. 2020（ORB-SLAM3。要旨だけ読んだ。arXiv 2007.11898）: 単眼・ステレオ・RGB-D のカメラで、視覚だけ・視覚と慣性・複数の地図の SLAM ができる。ピンホールと魚眼のレンズに対応する。見失うと新しい地図を始め、同じ場所に戻ったときに前の地図とつなげる。コード（`UZ-SLAMLab/ORB_SLAM3` のコミット `4452a3c`）は GPL v3 |
-| F-N14 | Corlito et al. 2026（本文の一部（方法の選び方、IMU の比較、結論）を読んだ。arXiv 2606.19067）: 四脚ロボット（ANYmal D。GrandTour のデータセット）で、着地の衝撃・高い周波数の振動・速い回転が SLAM に与える影響を、センサーの組み合わせごとに比べた。ステレオは単眼と RGB-D より一貫して良かった。グローバルシャッターは、ローリングシャッターより動きによる追跡の失敗を減らした。視覚が中心の手法（ORB-SLAM3）では、IMU を足すとかえって頑健さが落ちることがあった。ORB-SLAM3 の単眼と IMU（中級の ADIS）の組み合わせの平均の位置の誤差（ATE）は 2.773m、高級の IMU で 0.858m、ステレオと IMU では 0.229m・0.168m。結論として、視覚が中心の手法には、IMU を組み合わせないグローバルシャッターのステレオを勧めている |
-| F-N15 | Aditya et al. 2025（要旨と、本文の一部（実験の機体とセンサー）を読んだ。arXiv 2505.02272）: 安価な四脚ロボット向けに、接地を使う脚の幾何のオドメトリ・VIO・深度で安定させた視覚を組み合わせ、2D の地図を作って位置を推定し、自分で移動する。実験の機体は Unitree Go2 と MAB Silver Badger（ほかに Go1・A1・Honey Badger でも試した）。センサーは深度カメラ（Intel RealSense D435i）、機体の IMU、関節のエンコーダー |
+| F-N14 | Corlito et al. 2026（本文の一部（方法の選び方、IMU の比較、結論）を読んだ。arXiv 2606.19067）: 四脚ロボット（ANYmal D。GrandTour のデータセット）で、着地の衝撃・高い周波数の振動・速い回転が SLAM に与える影響を、センサーの組み合わせごとに比べた。ステレオは単眼と RGB-D より一貫して良かった。グローバルシャッターは、ローリングシャッターより動きによる追跡の失敗を減らした。視覚が中心の手法（ORB-SLAM3）では、IMU を足すとかえって頑健さが落ちることがあった。ORB-SLAM3 の単眼と IMU（中級の ADIS）の組み合わせの平均の位置の誤差（ATE）は 2.773m、高級の IMU で 0.858m、ステレオと IMU では 0.229m・0.168m（どれも追跡に失敗した走行を除いた平均。単眼と ADIS の組み合わせは1つの走行で失敗した）。結論として、視覚が中心の手法には、IMU を組み合わせないグローバルシャッターのステレオを勧めている。IMU で悪くなった理由は、脚の着地の衝撃が最適化に雑音を入れるため、という著者の仮説 |
+| F-N15 | Aditya et al. 2025（要旨と、本文の一部（実験の機体とセンサー）を読んだ。arXiv 2505.02272）: 安価な四脚ロボット向けに、接地を使う脚の幾何のオドメトリ・VIO・深度で安定させた視覚を組み合わせ、2D の地図を作って位置を推定し、自分で移動する。実験の機体は Unitree Go2 と MAB Silver Badger（ほかに Go1・A1・Honey Badger でも試した）。センサーは深度カメラ（Intel RealSense D435i）、機体の IMU、関節のエンコーダー。接地センサーは使わず、関節のトルクから接地を推定した（generalized momentum の observer。III-A 節）。Go2 との比較はシミュレーション（Gazebo）で、実機の評価（IV-E 節）は MAB Silver Badger で行った |
 | F-N16 | Barkley et al. 2025（要旨だけ読んだ。arXiv 2505.01931）: Petoi Bittle と Raspberry Pi Zero 2W、上から見るカメラ（overhead camera）で、GPT-4 と A* の経路計画を比べた。要旨からは、Bittle に載せたカメラで位置を推定したとは読めない |
 
 出典:
@@ -198,9 +198,9 @@ E17 の2回の実施による（判定は2回目の記録。1回目も同じ判�
 - F-N8: [Burgard, Fox, Thrun 1999, JAIR](https://arxiv.org/abs/1106.0222)（arXiv の要旨）
 - F-N9: [davidmball/ratslam](https://github.com/davidmball/ratslam/tree/9050b9531df5587e464fbbec73f9340149c4b660)（README、`license.txt`、`config/config_stlucia.txt.in`）
 - F-N10: [arXiv 2107.07243](https://arxiv.org/abs/2107.07243)
-- F-N11: [arXiv 2209.07654](https://arxiv.org/abs/2209.07654)、[Cerberus](https://github.com/ShuoYangRobotics/Cerberus/tree/ad56c433a9a95aa47b1a436fb92c8e14c18965bd)（README）
+- F-N11: [arXiv 2209.07654](https://arxiv.org/abs/2209.07654)、[Cerberus](https://github.com/ShuoYangRobotics/Cerberus/tree/ad56c433a9a95aa47b1a436fb92c8e14c18965bd)（README、`LICENCE`）
 - F-N12: [arXiv 2111.15164](https://arxiv.org/abs/2111.15164)
 - F-N13: [arXiv 2007.11898](https://arxiv.org/abs/2007.11898)、[ORB_SLAM3](https://github.com/UZ-SLAMLab/ORB_SLAM3/tree/4452a3c4ab75b1cde34e5505a36ec3f9edcdc4c4)（`LICENSE`）
 - F-N14: [arXiv 2606.19067](https://arxiv.org/abs/2606.19067)（HTML 版の III-A・IV-C・V 節）
-- F-N15: [arXiv 2505.02272](https://arxiv.org/abs/2505.02272)（HTML 版の IV 節）
+- F-N15: [arXiv 2505.02272](https://arxiv.org/abs/2505.02272)（HTML 版の III-A 節と IV 節）
 - F-N16: [arXiv 2505.01931](https://arxiv.org/abs/2505.01931)
