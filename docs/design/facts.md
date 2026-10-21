@@ -189,4 +189,4 @@ E17 の2回の実施による（判定は2回目の記録。1回目も同じ判�
 - F-N6: [Dupeyroux et al. 2019, Science Robotics](https://doi.org/10.1126/scirobotics.aau0307)（Europe PMC の要旨）
 - F-N7: [Stone et al. 2017, Current Biology](https://doi.org/10.1016/j.cub.2017.08.052)（Europe PMC の要旨）、[path-integration](https://github.com/InsectRobotics/path-integration/tree/d0657cbc50de7eb437569da68ae4e30a6572d9f2)
 - F-N8: [Burgard, Fox, Thrun 1999, JAIR](https://arxiv.org/abs/1106.0222)（arXiv の要旨）
-- F-N9: [davidmball/ratslam](https://github.com/davidmball/ratslam/tree/9050b9531df5587e464fbbec73f9340149c4b660)（README、`license.txt`）
+- F-N9: [davidmball/ratslam](https://github.com/davidmball/ratslam/tree/9050b9531df5587e464fbbec73f9340149c4b660)（README、`license.txt`、`config/config_stlucia.txt.in`）
