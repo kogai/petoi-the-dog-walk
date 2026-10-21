@@ -163,3 +163,30 @@ E17 の2回の実施による（判定は2回目の記録。1回目も同じ判�
 | F-F19 | `FlyBrain.step(100)`（100ms 分）1回の計算時間は、4つの計測（2つの入力 × 2回、各100回）の中央値が 48.3〜55.9 ms、最大が 82.2〜101.7 ms で、100ms 以上の窓があった（101.7 ms）。1回目の記録では、最大が 106.1〜122.9 ms だった。回路の読み込みと `FlyBrain` の構築の時間は含まない。最大が大きくなる理由は調べていない |
 
 出典: E17（[experimentals/E17-node-flybrain.md](../../experimentals/E17-node-flybrain.md)）。1スレッドで計算することは、[flybrain.js](https://github.com/lavallee/mk-jev-fly-brain/blob/8217937e6e725b0ce3160c6e1ab0183db8b8aa30/mk/flybrain.js)（コミット `8217937`）を読んで確かめた
+
+## 場所の記憶と帰巣の先行研究
+
+[08](08-navigation.md) 6節の候補を比べるための事実。どこまで読んだか（本文・要旨だけ・コードだけ）を、それぞれに書く。2026-10-21 に読んだ。
+
+| ID | 事実 |
+|---|---|
+| F-N1 | Baddeley et al. 2012（本文を読んだ）: アリの経路の航行を「見覚えのある景色を探すこと」に置き換えるモデル。体の向きと見る向きが同じなので、見覚えのある景色は見覚えのある進む向きを示す。体を振って見回し（scan）、いちばん見覚えのある向きへ進む。見覚えは、学習中の景色すべてとの比較（perfect memory）か、学習した神経回路網（Infomax）で決める。いつ何を覚えるかの指定も、経路を中継点に分けることも要らない。同じ仕組みで、場所を探す動きも出る。試したのはシミュレーションの中だけで、物は空を背にした影（2値）として見える、低解像度の全周の画像を使う |
+| F-N2 | Ardin et al. 2016（本文を読んだ）: ショウジョウバエの匂いの連合学習のために作られたキノコ体のスパイキングモデルが、大きさを増やす以外ほとんど手を加えずに、アリの景色の経路の学習に使えた。視点は地面から 1cm、視野は横 296° × 縦 76°、10×36 画素（360 次元のベクトル）に縮める。実際のアリの経路から作った約 8m の経路 15 本で、経路から 20cm 以上外れた回数の平均は、でたらめに進むと 18.7、perfect memory で 1.1、キノコ体のモデルで 2.6、Infomax で 1.5。キノコ体は経路上の 80 枚以上の画像を覚えた。計算はシミュレーションの中だけ。コードは Dryad にあると書いている（ライセンスは未確認） |
+| F-N3 | Sun et al. 2020（本文を読んだ）: 経路積分（中心複合体）、経路追従と景色による帰巣（キノコ体）の3つの仕組みを、リングアトラクターで組み合わせる虫の航行のモデル。行動実験のデータ（手がかりを食い違わせた実験）をシミュレーションで再現した。景色は全周の画像（300×104）を Zernike モーメントで周波数に変えて使う。コードは Python で、MIT ライセンス（`XuelongSun/InsectNavigationToolkitModelling` のコミット `470c7d7` の `LICENSE`） |
+| F-N4 | Wystrach et al. 2016（本文を読んだ）: 景色の照合で向きを決める課題を、シミュレーションの中で、視野（横 36°〜360°）と解像度を変えて比べた。向きは、解像度が低く視野が広いほど安定した。視野が狭いと、学んだ経路から大きく離れたときにまったく働かなかった。画素の数は 100〜1000 ほどがいちばん良く、視野が狭いときは解像度を上げると良くなった |
+| F-N5 | van Dijk et al. 2024（要旨だけ読んだ）: 虫に学んだ経路追従。行きの経路を、強く圧縮した全周の画像と、その間の位置の関係（オドメトリで測る）の組として覚える。帰りは、オドメトリと景色による帰巣を組み合わせて覚えた場所へ戻り、景色による帰巣でオドメトリの誤差がたまるのを防ぐ。覚える画像は、オドメトリの精度が許す限り間隔を空けて減らす。56g のドローンで、100m までの経路をたどれた。経路の記録は 1m あたり 20 バイト未満 |
+| F-N6 | Dupeyroux et al. 2019（AntBot。要旨だけ読んだ）: 六本脚の歩行ロボットで、アリに学んだ経路積分を屋外で試した。向きは空の偏光（紫外線）から、距離は歩数と optic flow から得る。センサーは合わせて 14 画素。帰巣の誤差は平均で経路全体の 0.67%（アリと同じような光の条件で） |
+| F-N7 | Stone et al. 2017（要旨と、コードだけ読んだ。本文は読めなかった）: ハチの中心複合体で、偏光のコンパスのニューロンと optic flow の速さのニューロンが合流することを示し、経路積分と、今の向きと進みたい向きを比べて舵を取る回路を提案した。コード（`InsectRobotics/path-integration` のコミット `d0657cb`）にはライセンスのファイルが無い。ニューロンの数は群ごとに 2〜16 個（`central_complex.py` の定数） |
+| F-N8 | Burgard, Fox, Thrun 1999（Markov 位置推定。要旨だけ読んだ。arXiv 1106.0222）: ロボットのいそうな位置すべてに確率を持ち、細かい格子で表す。最初から位置を探すことも、見失った後に立ち直ることもできる。環境の大まかなモデル（占有格子の地図など）を前提にする |
+| F-N9 | OpenRatSLAM（README とコードだけ読んだ。論文は読めなかった）: 連続アトラクターの回路の動きに基づく、生物に学んだ SLAM。ループを閉じてオドメトリの誤差を直す。C++ と ROS の実装で、GPL v3（`davidmball/ratslam` のコミット `9050b95` の `license.txt`） |
+
+出典:
+- F-N1: [Baddeley et al. 2012, PLoS Comput Biol](https://doi.org/10.1371/journal.pcbi.1002336)（CC BY。Europe PMC の全文 PMC3252273）
+- F-N2: [Ardin et al. 2016, PLoS Comput Biol](https://doi.org/10.1371/journal.pcbi.1004683)（CC BY。PMC4750948）
+- F-N3: [Sun et al. 2020, eLife](https://doi.org/10.7554/eLife.54026)（CC BY。PMC7365663）、[InsectNavigationToolkitModelling](https://github.com/XuelongSun/InsectNavigationToolkitModelling/tree/470c7d783dc5678e22170f582b09a72b265071cb)
+- F-N4: [Wystrach et al. 2016, J Comp Physiol A](https://doi.org/10.1007/s00359-015-1052-1)（CC BY。PMC4722065）
+- F-N5: [van Dijk et al. 2024, Science Robotics](https://doi.org/10.1126/scirobotics.adk0310)（Europe PMC の要旨）
+- F-N6: [Dupeyroux et al. 2019, Science Robotics](https://doi.org/10.1126/scirobotics.aau0307)（Europe PMC の要旨）
+- F-N7: [Stone et al. 2017, Current Biology](https://doi.org/10.1016/j.cub.2017.08.052)（Europe PMC の要旨）、[path-integration](https://github.com/InsectRobotics/path-integration/tree/d0657cbc50de7eb437569da68ae4e30a6572d9f2)
+- F-N8: [Burgard, Fox, Thrun 1999, JAIR](https://arxiv.org/abs/1106.0222)（arXiv の要旨）
+- F-N9: [davidmball/ratslam](https://github.com/davidmball/ratslam/tree/9050b9531df5587e464fbbec73f9340149c4b660)（README、`license.txt`）
