@@ -66,3 +66,14 @@ mise run check               # 公開内容 / fmt / clippy / doc / 依存の境�
 - [server.py](https://raw.githubusercontent.com/lavallee/mk-jev-fly-brain/main/server.py)
 - [philshiu/Drosophila_brain_model](https://github.com/philshiu/Drosophila_brain_model)（Shiu et al. のモデル。F-F14）
 - [eonsystemspbc/fly-brain](https://github.com/eonsystemspbc/fly-brain)（Shiu et al. のモデルの移植版。F-F16）
+
+**場所の記憶と帰巣（F-N1〜F-N9）**
+- [Baddeley et al. 2012](https://doi.org/10.1371/journal.pcbi.1002336)（景色の見覚えによる経路追従）
+- [Ardin et al. 2016](https://doi.org/10.1371/journal.pcbi.1004683)（キノコ体のモデルによる経路の記憶）
+- [Sun et al. 2020](https://doi.org/10.7554/eLife.54026)（経路積分・経路追従・帰巣をまとめたモデル）、[コード](https://github.com/XuelongSun/InsectNavigationToolkitModelling)
+- [Wystrach et al. 2016](https://doi.org/10.1007/s00359-015-1052-1)（視野と解像度）
+- [van Dijk et al. 2024](https://doi.org/10.1126/scirobotics.adk0310)（小さなロボットの経路追従）
+- [Dupeyroux et al. 2019](https://doi.org/10.1126/scirobotics.aau0307)（AntBot）
+- [Stone et al. 2017](https://doi.org/10.1016/j.cub.2017.08.052)（中心複合体の経路積分）、[コード](https://github.com/InsectRobotics/path-integration)
+- [Burgard, Fox, Thrun 1999](https://arxiv.org/abs/1106.0222)（Markov 位置推定）
+- [davidmball/ratslam](https://github.com/davidmball/ratslam)（OpenRatSLAM）
