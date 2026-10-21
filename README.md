@@ -67,7 +67,7 @@ mise run check               # 公開内容 / fmt / clippy / doc / 依存の境�
 - [philshiu/Drosophila_brain_model](https://github.com/philshiu/Drosophila_brain_model)（Shiu et al. のモデル。F-F14）
 - [eonsystemspbc/fly-brain](https://github.com/eonsystemspbc/fly-brain)（Shiu et al. のモデルの移植版。F-F16）
 
-**場所の記憶と帰巣（F-N1〜F-N9）**
+**場所の記憶と帰巣（F-N1〜F-N16）**
 - [Baddeley et al. 2012](https://doi.org/10.1371/journal.pcbi.1002336)（景色の見覚えによる経路追従）
 - [Ardin et al. 2016](https://doi.org/10.1371/journal.pcbi.1004683)（キノコ体のモデルによる経路の記憶）
 - [Sun et al. 2020](https://doi.org/10.7554/eLife.54026)（経路積分・経路追従・帰巣をまとめたモデル）、[コード](https://github.com/XuelongSun/InsectNavigationToolkitModelling)
@@ -77,3 +77,8 @@ mise run check               # 公開内容 / fmt / clippy / doc / 依存の境�
 - [Stone et al. 2017](https://doi.org/10.1016/j.cub.2017.08.052)（中心複合体の経路積分）、[コード](https://github.com/InsectRobotics/path-integration)
 - [Burgard, Fox, Thrun 1999](https://arxiv.org/abs/1106.0222)（Markov 位置推定）
 - [davidmball/ratslam](https://github.com/davidmball/ratslam)（OpenRatSLAM）
+- [VILENS](https://arxiv.org/abs/2107.07243)、[Cerberus](https://arxiv.org/abs/2209.07654)、[WALK-VIO](https://arxiv.org/abs/2111.15164)（脚ロボットの視覚・慣性・脚オドメトリ）
+- [ORB-SLAM3](https://arxiv.org/abs/2007.11898)
+- [Corlito et al. 2026](https://arxiv.org/abs/2606.19067)（四脚ロボットでのセンサーの組み合わせの比較）
+- [Aditya et al. 2025](https://arxiv.org/abs/2505.02272)（安価な四脚ロボットの位置推定と地図）
+- [Barkley et al. 2025](https://arxiv.org/abs/2505.01931)（Bittle と上から見るカメラ）
