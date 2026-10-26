@@ -9,7 +9,7 @@
 | ID | 手順書 | 状態 |
 |---|---|---|
 | E00 | [E00-connectivity.md](E00-connectivity.md) | 反映済み |
-| E01 | [E01-imu-readout.md](E01-imu-readout.md) | 依頼中（2026-10-26 に脚付きで再依頼） |
+| E01 | [E01-imu-readout.md](E01-imu-readout.md) | 実施済み |
 | E02 | — | 未依頼 |
 | E04 | [E04-wifi-raw-command.md](E04-wifi-raw-command.md) | 依頼中 |
 | E05 | [E05-jev-japanese.md](E05-jev-japanese.md) | 依頼中 |
