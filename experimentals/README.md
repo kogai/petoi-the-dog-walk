@@ -9,7 +9,7 @@
 | ID | 手順書 | 状態 |
 |---|---|---|
 | E00 | [E00-connectivity.md](E00-connectivity.md) | 反映済み |
-| E01 | [E01-imu-readout.md](E01-imu-readout.md) | 依頼中 |
+| E01 | [E01-imu-readout.md](E01-imu-readout.md) | 依頼中（2026-10-26 に脚付きで再依頼） |
 | E02 | — | 未依頼 |
 | E04 | [E04-wifi-raw-command.md](E04-wifi-raw-command.md) | 依頼中 |
 | E05 | [E05-jev-japanese.md](E05-jev-japanese.md) | 依頼中 |
@@ -20,7 +20,7 @@
 | E10 | — | 未依頼 |
 | E11 | — | 未依頼 |
 | E12 | — | 未依頼 |
-| E13 | [E13-stop-token.md](E13-stop-token.md) | 依頼中（2026-10-16 の実施は中止し、同じ日に出力だけで判定する手順に書き直した） |
+| E13 | [E13-stop-token.md](E13-stop-token.md) | 依頼中（2026-10-16 の実施は中止し、同じ日に出力だけで判定する手順に書き直した。2026-10-26 に脚付きで再依頼） |
 | E14 | [E14-gait-resend.md](E14-gait-resend.md) | 依頼中 |
 | E15 | — | 未依頼 |
 | E16 | — | 未依頼 |
