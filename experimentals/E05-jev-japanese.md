@@ -150,7 +150,7 @@ lazy は性格どおりでも座る（`sit`）ことが多く、引きずられ�
 
 ### 出力
 
-実施者が会話に貼った `experimentals/raw/e05.jsonl` を、エージェントが転記した。手順 4 の出力は `0`。ID・メールアドレスらしい値は無かった。
+実施者が会話に貼った `experimentals/raw/e05.jsonl` を、エージェントが転記した。手順 4 の出力は `0`（実施者の報告）。ID・メールアドレスらしい値は、転記した行には無かった。
 
 ```
 {"body":{"answers":{"next_action":{"choice":"back","confidence":0.75,"probabilities":{"back":0.8,"balance":0.0,"hello":0.0,"sit":0.2,"walk":0.0},"type":"choice"}},"model":"jev-1.14.0","usage":{"input_tokens":397,"output_tokens":53}},"latency_ms":234,"precheck":"choice","status":200}
@@ -215,7 +215,7 @@ lazy は性格どおりでも座る（`sit`）ことが多く、引きずられ�
 
 エージェントが出力から数えた。
 
-- **D-10（呼べるか）**: 事前確認が2つとも `status` 200 で、`body.answers` に質問のキーがある。本番の 54 行もすべて 200。判定基準の1行目に当たる。
+- **D-10（呼べるか）**: 事前確認が2つとも `status` 200 で、`body.answers` に質問のキーがある。本番の 54 行もすべて 200。判定基準の1行目に当たる。呼び方（URL と `Authorization: Bearer`）は、公式ドキュメントの [System One](https://docs.typesafe.ai/api/system-one.md) でも確かめた（エージェント、2026-10-27）。
 - **D-04（英訳するか）**: 手順 0 の表が無いので、「期待どおり」の数は数えられない。`next_action` の一致は、`ja-state` と `en` が 18 組中 15 組（83%）、自己一致（`en` と `en-repeat`）が 18 組中 18 組（100%）。一致の割合が自己一致より 17 ポイント低く、1行目の条件（15 ポイント以上低くない）を満たさない。判定基準の3行目に当たり、**判定保留**。
   - 食い違った3組: shy・状況 0・指示あり（`ja-state` は `sit`、`en` は `back`）、shy・状況 2・指示なし（`back` と `balance`）、friendly・状況 1・指示あり（`hello` と `sit`）。
   - 指示ありの組の `instruction_applies` の平均は、`ja-state` 0.46、`en` 0.37。`ja-state` の方が低くはないので、4行目（指示文を英訳する）には当たらない。
